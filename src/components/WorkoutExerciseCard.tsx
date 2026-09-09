@@ -20,10 +20,16 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
     updateSet, 
     toggleSetCompleted, 
     removeExerciseFromCurrentWorkout,
-    personalRecords 
+    personalRecords,
+    focusedExerciseId,
+    setFocusedExercise
   } = useWorkoutStore();
 
   const pr = personalRecords[workoutExercise.exerciseId];
+  const isFocused = focusedExerciseId === workoutExercise.id;
+
+  const completedSets = workoutExercise.sets.filter(s => s.completed).length;
+  const totalSets = workoutExercise.sets.length;
 
   // Recupera o desempenho anterior (fantasma) deste exercício no banco local
   const lastPerformance = useMemo(() => {
@@ -31,26 +37,42 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
   }, [workoutExercise.exerciseId]);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isFocused && styles.cardFocused]}>
       {/* Cabeçalho do Exercício */}
-      <View style={styles.header}>
+      <TouchableOpacity 
+        style={styles.header}
+        activeOpacity={0.9}
+        onPress={() => setFocusedExercise(workoutExercise.id)}
+      >
         <View style={styles.titleArea}>
-          <View style={styles.iconBox}>
-            <Dumbbell size={18} color={Theme.colors.text} />
+          <View style={[styles.iconBox, isFocused && styles.iconBoxFocused]}>
+            <Dumbbell size={18} color={isFocused ? Theme.colors.primary : Theme.colors.text} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.exerciseName} numberOfLines={1}>
-              {workoutExercise.exerciseName}
-            </Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.exerciseName} numberOfLines={1}>
+                {workoutExercise.exerciseName}
+              </Text>
+              {isFocused && (
+                <View style={styles.focusPill}>
+                  <Text style={styles.focusPillText}>EM FOCO</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.subHeader}>
               <View style={styles.muscleBadge}>
                 <Text style={styles.muscleText}>
                   {workoutExercise.targetMuscle.toUpperCase()}
                 </Text>
               </View>
+              <View style={styles.progressBadge}>
+                <Text style={styles.progressBadgeText}>
+                  {completedSets}/{totalSets} SÉRIES
+                </Text>
+              </View>
               {pr && (
                 <Text style={styles.prText}>
-                  PR: {pr.maxWeightKg}kg ({pr.repsAtMaxWeight} reps)
+                  PR: {pr.maxWeightKg}kg
                 </Text>
               )}
             </View>
@@ -63,7 +85,7 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
         >
           <Trash2 size={18} color={Theme.colors.danger} />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
 
       {/* Cabeçalho da Tabela */}
       <View style={styles.tableHeader}>
@@ -114,6 +136,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
+  cardFocused: {
+    borderColor: Theme.colors.borderLight,
+    borderLeftWidth: 3,
+    borderLeftColor: Theme.colors.primary,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -134,6 +161,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconBoxFocused: {
+    backgroundColor: Theme.colors.primaryMuted,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  focusPill: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  focusPillText: {
+    color: Theme.colors.primary,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   exerciseName: {
     fontSize: 16,
     fontWeight: '700',
@@ -143,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    marginTop: 3,
   },
   muscleBadge: {
     backgroundColor: Theme.colors.surfaceElevated,
@@ -155,6 +204,21 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  progressBadge: {
+    backgroundColor: Theme.colors.surfaceCard,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  progressBadgeText: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
     letterSpacing: 0.5,
   },
   prText: {

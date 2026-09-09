@@ -1,12 +1,27 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
 import { Timer, X, Plus } from 'lucide-react-native';
 import { useWorkoutStore } from '../store/workoutStore';
 import Theme from '../theme/theme';
 
 export const RestTimerBar: React.FC = () => {
-  const { restTimer, tickRestTimer, stopRestTimer, startRestTimer } = useWorkoutStore();
+  const { restTimer, tickRestTimer, syncRestTimer, stopRestTimer, startRestTimer } = useWorkoutStore();
 
+  // Listener para sincronização instantânea ao retornar do segundo plano (AppState)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncRestTimer();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [syncRestTimer]);
+
+  // Contador síncrono com o timestamp absoluto
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (restTimer.isRunning && restTimer.remainingSeconds > 0) {

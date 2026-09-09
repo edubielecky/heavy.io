@@ -11,30 +11,39 @@ import {
   SetType, 
   RestTimerState 
 } from '../types/workout';
-
-// Fórmula de Brzycki para estimativa de 1RM: Peso * (36 / (37 - Repetições)) ou Peso / (1.0278 - (0.0278 * Reps))
-export const calculateEstimated1RM = (weightKg: number, reps: number): number => {
-  if (reps <= 0 || weightKg <= 0) return 0;
-  if (reps === 1) return weightKg;
-  const val = weightKg * (1 + reps / 30); // Fórmula de Epley simplificada e robusta
-  return Math.round(val * 10) / 10;
-};
-
 import { 
   saveWorkoutSession, 
   getWorkoutHistory, 
   getPersonalRecords, 
-  savePersonalRecord 
+  savePersonalRecord,
+  getWorkoutSession,
+  getActiveWorkoutSession,
+  deleteWorkoutSession,
+  logSet,
+  completeWorkout,
+  getExerciseById
 } from '../database/database';
+
+// Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
+export const calculateEstimated1RM = (weightKg: number, reps: number): number => {
+  if (reps <= 0 || weightKg <= 0) return 0;
+  if (reps === 1) return weightKg;
+  const val = weightKg * (1 + reps / 30);
+  return Math.round(val * 10) / 10;
+};
 
 interface WorkoutStoreState {
   currentWorkout: WorkoutSession | null;
   workoutHistory: WorkoutSession[];
   personalRecords: Record<string, PersonalRecord>;
   restTimer: RestTimerState;
+  focusedExerciseId: string | null;
 
   // Carregamento inicial do SQLite
   loadFromDatabase: () => void;
+
+  // Gerenciamento de Foco
+  setFocusedExercise: (id: string | null) => void;
 
   // Ações de Treino
   startWorkout: (name?: string) => void;
@@ -52,8 +61,9 @@ interface WorkoutStoreState {
   toggleSetCompleted: (workoutExerciseId: string, setId: string) => void;
 
   // Cronômetro de Descanso
-  startRestTimer: (seconds: number, exerciseName?: string) => void;
+  startRestTimer: (seconds: number, exerciseName?: string, exerciseId?: string) => void;
   tickRestTimer: () => void;
+  syncRestTimer: () => void;
   stopRestTimer: () => void;
 }
 
@@ -63,25 +73,34 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
       currentWorkout: null,
       workoutHistory: [],
       personalRecords: {},
+      focusedExerciseId: null,
       restTimer: {
+        targetEndTime: null,
         remainingSeconds: 0,
         totalSeconds: 0,
         exerciseName: '',
         isRunning: false,
       },
 
+      setFocusedExercise: (id: string | null) => {
+        set({ focusedExerciseId: id });
+      },
+
       loadFromDatabase: () => {
         try {
           const history = getWorkoutHistory();
           const prs = getPersonalRecords();
-          if (history.length > 0 || Object.keys(prs).length > 0) {
-            set({
-              workoutHistory: history,
-              personalRecords: prs,
-            });
-          }
+          const activeSession = getActiveWorkoutSession();
+
+          set({
+            workoutHistory: history,
+            personalRecords: prs,
+            // Restaura sessão ativa se existir e não houver treino em memória
+            currentWorkout: get().currentWorkout || activeSession || null,
+            focusedExerciseId: get().focusedExerciseId || (activeSession?.exercises[0]?.id ?? null),
+          });
         } catch (e) {
-          console.error('Failed to load initial data from SQLite:', e);
+          console.error('Failed to load data from SQLite:', e);
         }
       },
 
@@ -97,94 +116,77 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           isCompleted: false,
         };
 
+        // Salva rascunho ativo imediatamente no SQLite
+        try {
+          saveWorkoutSession(newSession);
+        } catch (err) {
+          console.error('Erro ao salvar rascunho de sessão ativa no SQLite:', err);
+        }
+
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-        set({ currentWorkout: newSession });
+        set({ 
+          currentWorkout: newSession,
+          focusedExerciseId: null,
+        });
       },
 
       cancelWorkout: () => {
+        const { currentWorkout } = get();
+        if (currentWorkout) {
+          try {
+            deleteWorkoutSession(currentWorkout.id);
+          } catch (err) {
+            console.error('Erro ao deletar sessão ativa do SQLite:', err);
+          }
+        }
+
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         set({ 
           currentWorkout: null,
-          restTimer: { remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false }
+          focusedExerciseId: null,
+          restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false }
         });
       },
 
       finishWorkout: () => {
-        const { currentWorkout, workoutHistory, personalRecords } = get();
+        const { currentWorkout } = get();
         if (!currentWorkout) return;
 
-        const endTime = new Date().toISOString();
-        const durationSeconds = Math.max(
-          1,
-          Math.floor((new Date(endTime).getTime() - new Date(currentWorkout.startTime).getTime()) / 1000)
-        );
-
-        let totalTonnage = 0;
-        let totalCompletedSets = 0;
-        const updatedPRs = { ...personalRecords };
-
-        currentWorkout.exercises.forEach(we => {
-          we.sets.forEach(s => {
-            if (s.completed && s.weightKg > 0 && s.reps > 0) {
-              totalTonnage += s.weightKg * s.reps;
-              totalCompletedSets += 1;
-
-              const est1RM = calculateEstimated1RM(s.weightKg, s.reps);
-              const currentPR = updatedPRs[we.exerciseId];
-
-              if (!currentPR || est1RM > currentPR.estimated1RM || s.weightKg > currentPR.maxWeightKg) {
-                updatedPRs[we.exerciseId] = {
-                  exerciseId: we.exerciseId,
-                  exerciseName: we.exerciseName,
-                  maxWeightKg: Math.max(s.weightKg, currentPR?.maxWeightKg || 0),
-                  repsAtMaxWeight: s.reps,
-                  estimated1RM: Math.max(est1RM, currentPR?.estimated1RM || 0),
-                  achievedAt: endTime,
-                };
-              }
-            }
-          });
-        });
-
-        const completedSession: WorkoutSession = {
-          ...currentWorkout,
-          endTime,
-          durationSeconds,
-          totalTonnageKg: Math.round(totalTonnage),
-          totalSets: totalCompletedSets,
-          isCompleted: true,
-        };
-
-        // Persistência instantânea no banco local SQLite
         try {
-          saveWorkoutSession(completedSession);
-          Object.values(updatedPRs).forEach(pr => savePersonalRecord(pr));
+          // Fecha o treino diretamente no banco calculando tonelagem e tempo
+          const completed = completeWorkout(currentWorkout.id);
+          const history = getWorkoutHistory();
+          const prs = getPersonalRecords();
+
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+          set({
+            currentWorkout: null,
+            focusedExerciseId: null,
+            workoutHistory: history,
+            personalRecords: prs,
+            restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
+          });
         } catch (err) {
-          console.error('Erro ao persistir sessão no SQLite:', err);
+          console.error('Erro ao finalizar treino no SQLite:', err);
         }
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-
-        set({
-          currentWorkout: null,
-          workoutHistory: [completedSession, ...workoutHistory],
-          personalRecords: updatedPRs,
-          restTimer: { remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
-        });
       },
 
       addExerciseToCurrentWorkout: (exercise: Exercise) => {
         const { currentWorkout } = get();
         if (!currentWorkout) return;
 
+        const newWorkoutExerciseId = `we_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const initialSetId = `set_${Date.now()}_1`;
+
         const newWorkoutExercise: WorkoutExercise = {
-          id: `we_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          id: newWorkoutExerciseId,
           exerciseId: exercise.id,
           exerciseName: exercise.name,
           targetMuscle: exercise.targetMuscle,
           sets: [
             {
-              id: `set_${Date.now()}_1`,
+              id: initialSetId,
               setNumber: 1,
               type: 'normal',
               weightKg: 0,
@@ -194,25 +196,49 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           ],
         };
 
+        const updatedSession: WorkoutSession = {
+          ...currentWorkout,
+          exercises: [...currentWorkout.exercises, newWorkoutExercise],
+        };
+
+        // Salva atualização no SQLite para persistência total
+        try {
+          saveWorkoutSession(updatedSession);
+        } catch (err) {
+          console.error('Erro ao salvar exercício no SQLite:', err);
+        }
+
         Haptics.selectionAsync().catch(() => {});
 
         set({
-          currentWorkout: {
-            ...currentWorkout,
-            exercises: [...currentWorkout.exercises, newWorkoutExercise],
-          },
+          currentWorkout: updatedSession,
+          focusedExerciseId: newWorkoutExerciseId,
         });
       },
 
       removeExerciseFromCurrentWorkout: (workoutExerciseId: string) => {
-        const { currentWorkout } = get();
+        const { currentWorkout, focusedExerciseId } = get();
         if (!currentWorkout) return;
 
+        const updatedExercises = currentWorkout.exercises.filter(e => e.id !== workoutExerciseId);
+        const updatedSession: WorkoutSession = {
+          ...currentWorkout,
+          exercises: updatedExercises,
+        };
+
+        try {
+          saveWorkoutSession(updatedSession);
+        } catch (err) {
+          console.error('Erro ao remover exercício no SQLite:', err);
+        }
+
+        const nextFocus = focusedExerciseId === workoutExerciseId 
+          ? (updatedExercises[0]?.id || null) 
+          : focusedExerciseId;
+
         set({
-          currentWorkout: {
-            ...currentWorkout,
-            exercises: currentWorkout.exercises.filter(e => e.id !== workoutExerciseId),
-          },
+          currentWorkout: updatedSession,
+          focusedExerciseId: nextFocus,
         });
       },
 
@@ -234,8 +260,18 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           return { ...we, sets: [...we.sets, newSet] };
         });
 
+        const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+        try {
+          saveWorkoutSession(updatedSession);
+        } catch (err) {
+          console.error('Erro ao adicionar set no SQLite:', err);
+        }
+
         Haptics.selectionAsync().catch(() => {});
-        set({ currentWorkout: { ...currentWorkout, exercises: updatedExercises } });
+        set({ 
+          currentWorkout: updatedSession,
+          focusedExerciseId: workoutExerciseId,
+        });
       },
 
       removeSet: (workoutExerciseId: string, setId: string) => {
@@ -249,59 +285,147 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           return { ...we, sets: renumbered };
         });
 
-        set({ currentWorkout: { ...currentWorkout, exercises: updatedExercises } });
+        const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+        try {
+          saveWorkoutSession(updatedSession);
+        } catch (err) {
+          console.error('Erro ao remover set no SQLite:', err);
+        }
+
+        set({ currentWorkout: updatedSession });
       },
 
       updateSet: (workoutExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => {
         const { currentWorkout } = get();
         if (!currentWorkout) return;
 
+        let targetSet: WorkoutSet | null = null;
         const updatedExercises = currentWorkout.exercises.map(we => {
           if (we.id !== workoutExerciseId) return we;
-          const updatedSets = we.sets.map(s => (s.id === setId ? { ...s, ...updates } : s));
-          return { ...we, sets: updatedSets };
-        });
-
-        set({ currentWorkout: { ...currentWorkout, exercises: updatedExercises } });
-      },
-
-      toggleSetCompleted: (workoutExerciseId: string, setId: string) => {
-        const { currentWorkout } = get();
-        if (!currentWorkout) return;
-
-        let justCompleted = false;
-        let exerciseName = '';
-
-        const updatedExercises = currentWorkout.exercises.map(we => {
-          if (we.id !== workoutExerciseId) return we;
-          exerciseName = we.exerciseName;
           const updatedSets = we.sets.map(s => {
             if (s.id === setId) {
-              const newState = !s.completed;
-              if (newState) justCompleted = true;
-              return { ...s, completed: newState };
+              targetSet = { ...s, ...updates };
+              return targetSet;
             }
             return s;
           });
           return { ...we, sets: updatedSets };
         });
 
+        const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+
+        // Auto-save local em segundo plano
+        try {
+          if (targetSet) {
+            logSet({
+              id: (targetSet as WorkoutSet).id,
+              sessionExerciseId: workoutExerciseId,
+              setNumber: (targetSet as WorkoutSet).setNumber,
+              type: (targetSet as WorkoutSet).type,
+              weightKg: (targetSet as WorkoutSet).weightKg,
+              reps: (targetSet as WorkoutSet).reps,
+              rpe: (targetSet as WorkoutSet).rpe,
+              rir: (targetSet as WorkoutSet).rir,
+              completed: (targetSet as WorkoutSet).completed,
+            });
+          }
+        } catch (err) {
+          console.error('Erro ao salvar atualização do set no SQLite:', err);
+        }
+
+        set({ currentWorkout: updatedSession });
+      },
+
+      /**
+       * Auto-save local no SQLite antes de disparar o timer de descanso
+       */
+      toggleSetCompleted: (workoutExerciseId: string, setId: string) => {
+        const { currentWorkout } = get();
+        if (!currentWorkout) return;
+
+        let justCompleted = false;
+        let exerciseName = '';
+        let targetExerciseId = '';
+        let targetSet: WorkoutSet | null = null;
+
+        const updatedExercises = currentWorkout.exercises.map(we => {
+          if (we.id !== workoutExerciseId) return we;
+          exerciseName = we.exerciseName;
+          targetExerciseId = we.exerciseId;
+
+          const updatedSets = we.sets.map(s => {
+            if (s.id === setId) {
+              const newState = !s.completed;
+              if (newState) justCompleted = true;
+              targetSet = { 
+                ...s, 
+                completed: newState,
+                completedAt: newState ? new Date().toISOString() : undefined,
+              };
+              return targetSet;
+            }
+            return s;
+          });
+          return { ...we, sets: updatedSets };
+        });
+
+        // 1. AUTO-SAVE LOCAL IMEDIATO NO SQLITE (COMMIT DIRETO ANTES DO TIMER)
+        if (targetSet) {
+          try {
+            logSet({
+              id: (targetSet as WorkoutSet).id,
+              sessionExerciseId: workoutExerciseId,
+              setNumber: (targetSet as WorkoutSet).setNumber,
+              type: (targetSet as WorkoutSet).type,
+              weightKg: (targetSet as WorkoutSet).weightKg,
+              reps: (targetSet as WorkoutSet).reps,
+              rpe: (targetSet as WorkoutSet).rpe,
+              rir: (targetSet as WorkoutSet).rir,
+              completed: (targetSet as WorkoutSet).completed,
+            });
+
+            // Atualiza PRs se houve novo recorde
+            const updatedPRs = getPersonalRecords();
+            set({ personalRecords: updatedPRs });
+          } catch (err) {
+            console.error('Erro no commit atômico do set no SQLite:', err);
+          }
+        }
+
+        // 2. ATUALIZAÇÃO DO ESTADO DA SESSÃO E FOCO
+        const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+        set({ 
+          currentWorkout: updatedSession,
+          focusedExerciseId: workoutExerciseId,
+        });
+
+        // 3. DISPARO DO TIMER DE DESCANSO SE CONCLUÍDO
         if (justCompleted) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-          // Auto-iniciar descanso padrão de 90s
-          get().startRestTimer(90, exerciseName);
+          
+          // Recupera o tempo de descanso padrão do exercício se cadastrado
+          let restSeconds = 90;
+          try {
+            const exInfo = getExerciseById(targetExerciseId);
+            if (exInfo?.defaultRestSeconds && exInfo.defaultRestSeconds > 0) {
+              restSeconds = exInfo.defaultRestSeconds;
+            }
+          } catch {}
+
+          get().startRestTimer(restSeconds, exerciseName, targetExerciseId);
         } else {
           Haptics.selectionAsync().catch(() => {});
         }
-
-        set({ currentWorkout: { ...currentWorkout, exercises: updatedExercises } });
       },
 
-      startRestTimer: (seconds: number, exerciseName: string = '') => {
+      startRestTimer: (seconds: number, exerciseName: string = '', exerciseId?: string) => {
+        const targetEndTime = Date.now() + seconds * 1000;
         set({
           restTimer: {
+            targetEndTime,
             remainingSeconds: seconds,
             totalSeconds: seconds,
+            exerciseId,
             exerciseName,
             isRunning: true,
           },
@@ -310,16 +434,44 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
       tickRestTimer: () => {
         const { restTimer } = get();
-        if (!restTimer.isRunning) return;
+        if (!restTimer.isRunning || !restTimer.targetEndTime) return;
 
-        if (restTimer.remainingSeconds <= 1) {
+        const remaining = Math.max(0, Math.ceil((restTimer.targetEndTime - Date.now()) / 1000));
+
+        if (remaining <= 0) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
           set({
-            restTimer: { ...restTimer, remainingSeconds: 0, isRunning: false },
+            restTimer: { 
+              ...restTimer, 
+              remainingSeconds: 0, 
+              targetEndTime: null, 
+              isRunning: false 
+            },
+          });
+        } else if (remaining !== restTimer.remainingSeconds) {
+          set({
+            restTimer: { ...restTimer, remainingSeconds: remaining },
+          });
+        }
+      },
+
+      syncRestTimer: () => {
+        const { restTimer } = get();
+        if (!restTimer.isRunning || !restTimer.targetEndTime) return;
+
+        const remaining = Math.max(0, Math.ceil((restTimer.targetEndTime - Date.now()) / 1000));
+        if (remaining <= 0) {
+          set({
+            restTimer: { 
+              ...restTimer, 
+              remainingSeconds: 0, 
+              targetEndTime: null, 
+              isRunning: false 
+            },
           });
         } else {
           set({
-            restTimer: { ...restTimer, remainingSeconds: restTimer.remainingSeconds - 1 },
+            restTimer: { ...restTimer, remainingSeconds: remaining },
           });
         }
       },
@@ -327,7 +479,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
       stopRestTimer: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         set({
-          restTimer: { remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
+          restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
         });
       },
     }),
@@ -338,7 +490,10 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         workoutHistory: state.workoutHistory,
         personalRecords: state.personalRecords,
         currentWorkout: state.currentWorkout,
+        focusedExerciseId: state.focusedExerciseId,
+        restTimer: state.restTimer,
       }),
     }
   )
 );
+

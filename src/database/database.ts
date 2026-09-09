@@ -710,3 +710,32 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
   return getWorkoutSession(sessionId);
 };
 
+/**
+ * 5. getActiveWorkoutSession(): Recupera a sessão ativa não finalizada do SQLite (is_completed = 0).
+ */
+export const getActiveWorkoutSession = (): WorkoutSession | null => {
+  const db = getDatabase();
+  const activeSessionRow = db.getFirstSync<{ id: string }>(
+    'SELECT id FROM workout_sessions WHERE is_completed = 0 ORDER BY start_time DESC LIMIT 1;'
+  );
+
+  if (!activeSessionRow) return null;
+  return getWorkoutSession(activeSessionRow.id);
+};
+
+/**
+ * 6. deleteWorkoutSession(sessionId): Remove a sessão e todos os seus registros atrelados.
+ */
+export const deleteWorkoutSession = (sessionId: string): void => {
+  const db = getDatabase();
+  db.withTransactionSync(() => {
+    db.runSync(
+      `DELETE FROM workout_sets WHERE session_exercise_id IN (
+         SELECT id FROM workout_session_exercises WHERE session_id = ?
+       );`,
+      [sessionId]
+    );
+    db.runSync('DELETE FROM workout_session_exercises WHERE session_id = ?;', [sessionId]);
+    db.runSync('DELETE FROM workout_sessions WHERE id = ?;', [sessionId]);
+  });
+};

@@ -34,11 +34,17 @@ export default function WorkoutScreen() {
     finishWorkout, 
     addExerciseToCurrentWorkout,
     workoutHistory,
-    personalRecords 
+    personalRecords,
+    loadFromDatabase 
   } = useWorkoutStore();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Carrega histórico e restaura treino ativo não finalizado do SQLite no boot
+  useEffect(() => {
+    loadFromDatabase();
+  }, [loadFromDatabase]);
 
   // Timer de duração do treino ativo
   useEffect(() => {
@@ -208,19 +214,36 @@ export default function WorkoutScreen() {
     );
   }
 
+  // Métricas em tempo real da sessão ativa
+  const totalDoneSets = currentWorkout
+    ? currentWorkout.exercises.reduce((acc, we) => acc + we.sets.filter(s => s.completed).length, 0)
+    : 0;
+  const totalPendingSets = currentWorkout
+    ? currentWorkout.exercises.reduce((acc, we) => acc + we.sets.filter(s => !s.completed).length, 0)
+    : 0;
+  const liveTonnage = currentWorkout
+    ? currentWorkout.exercises.reduce((acc, we) => acc + we.sets.filter(s => s.completed).reduce((sAcc, s) => sAcc + (s.weightKg * s.reps), 0), 0)
+    : 0;
+
   // Se HÁ um treino ativo:
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.activeContainer}>
         {/* Active Header */}
         <View style={styles.activeHeader}>
-          <View>
+          <View style={{ flex: 1, marginRight: 10 }}>
             <Text style={styles.activeWorkoutTitle} numberOfLines={1}>
               {currentWorkout.name}
             </Text>
             <View style={styles.timerRow}>
-              <Clock size={13} color={Theme.colors.primary} />
+              <Clock size={12} color={Theme.colors.primary} />
               <Text style={styles.elapsedText}>{formatElapsed(elapsedSeconds)}</Text>
+              <Text style={styles.metricsDot}>•</Text>
+              <Text style={styles.metricsText}>{totalDoneSets} feitas</Text>
+              <Text style={styles.metricsDot}>•</Text>
+              <Text style={styles.metricsText}>{totalPendingSets} pendentes</Text>
+              <Text style={styles.metricsDot}>•</Text>
+              <Text style={styles.metricsText}>{Math.round(liveTonnage)}kg</Text>
             </View>
           </View>
 
@@ -466,6 +489,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Theme.colors.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  metricsDot: {
+    fontSize: 10,
+    color: Theme.colors.borderLight,
+  },
+  metricsText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   activeHeaderActions: {
