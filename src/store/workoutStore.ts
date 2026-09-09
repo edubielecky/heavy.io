@@ -80,6 +80,7 @@ interface WorkoutStoreState {
 
   // Cronômetro de Descanso
   startRestTimer: (seconds: number, exerciseName?: string, exerciseId?: string) => void;
+  addRestTimerSeconds: (seconds: number) => void;
   tickRestTimer: () => void;
   syncRestTimer: () => void;
   stopRestTimer: () => void;
@@ -582,6 +583,30 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
             isRunning: true,
           },
         });
+      },
+
+      addRestTimerSeconds: (seconds: number) => {
+        const { restTimer } = get();
+        if (restTimer.isRunning && restTimer.targetEndTime) {
+          const newRemaining = restTimer.remainingSeconds + seconds;
+          const newTargetEndTime = restTimer.targetEndTime + seconds * 1000;
+          const newTotal = restTimer.totalSeconds + seconds;
+
+          // Re-agenda alarme de término e atualiza Ongoing Notification / Live Activity
+          scheduleRestTimerNotification(newRemaining, restTimer.exerciseName);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+          set({
+            restTimer: {
+              ...restTimer,
+              remainingSeconds: newRemaining,
+              targetEndTime: newTargetEndTime,
+              totalSeconds: newTotal,
+            },
+          });
+        } else {
+          get().startRestTimer(seconds);
+        }
       },
 
       tickRestTimer: () => {

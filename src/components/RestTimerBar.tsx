@@ -5,7 +5,13 @@ import { useWorkoutStore } from '../store/workoutStore';
 import Theme from '../theme/theme';
 
 export const RestTimerBar: React.FC = () => {
-  const { restTimer, tickRestTimer, syncRestTimer, stopRestTimer, startRestTimer } = useWorkoutStore();
+  const { 
+    restTimer, 
+    tickRestTimer, 
+    syncRestTimer, 
+    stopRestTimer, 
+    addRestTimerSeconds 
+  } = useWorkoutStore();
 
   // Listener para sincronização instantânea ao retornar do segundo plano (AppState)
   useEffect(() => {
@@ -49,7 +55,7 @@ export const RestTimerBar: React.FC = () => {
     : 0;
 
   const handleAdd30s = () => {
-    startRestTimer(restTimer.remainingSeconds + 30, restTimer.exerciseName);
+    addRestTimerSeconds(30);
   };
 
   return (

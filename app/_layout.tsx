@@ -19,8 +19,14 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 import { initDatabase } from '../src/database/database';
-import { initNotificationService, requestNotificationPermissions } from '../src/services/notificationService';
+import { 
+  initNotificationService, 
+  requestNotificationPermissions,
+  REST_ACTION_ADD_30,
+  REST_ACTION_SKIP 
+} from '../src/services/notificationService';
 import { initSyncQueue } from '../src/services/syncQueueService';
+import { useWorkoutStore } from '../src/store/workoutStore';
 import * as Notifications from 'expo-notifications';
 
 export default function RootLayout() {
@@ -47,11 +53,27 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  // Listener para toques em notificações de descanso recebidas em segundo plano
+  // Listener para ações disparadas na tela de bloqueio (+30s, Pular) e notificações recebidas
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const actionId = response.actionIdentifier;
       const data = response.notification.request.content.data;
-      if (data?.type === 'REST_TIMER_COMPLETED') {
+
+      if (actionId === REST_ACTION_ADD_30) {
+        // Atleta tocou em "+30s" diretamente na tela de bloqueio
+        try {
+          useWorkoutStore.getState().addRestTimerSeconds(30);
+        } catch (err) {
+          console.warn('Erro ao processar +30s na lock screen:', err);
+        }
+      } else if (actionId === REST_ACTION_SKIP) {
+        // Atleta tocou em "Pular" diretamente na tela de bloqueio
+        try {
+          useWorkoutStore.getState().stopRestTimer();
+        } catch (err) {
+          console.warn('Erro ao pular descanso na lock screen:', err);
+        }
+      } else if (data?.type === 'REST_TIMER_COMPLETED') {
         // Notificação de descanso concluído interagida pelo usuário
       }
     });
