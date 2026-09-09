@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,10 +9,23 @@ import {
   SafeAreaView, 
   Alert 
 } from 'react-native';
-import { Search, Dumbbell, Timer, Flame, PlusCircle, Activity } from 'lucide-react-native';
+import { useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { 
+  Search, 
+  Dumbbell, 
+  Timer, 
+  Flame, 
+  PlusCircle, 
+  Activity, 
+  TrendingUp, 
+  ChevronRight,
+  Filter
+} from 'lucide-react-native';
 import { getExercises } from '../../src/database/database';
-import { Exercise, MuscleGroup } from '../../src/types/workout';
+import { Exercise, MuscleGroup, Equipment } from '../../src/types/workout';
 import { useWorkoutStore } from '../../src/store/workoutStore';
+import { ExerciseProgressModal } from '../../src/components/ExerciseProgressModal';
 import Theme from '../../src/theme/theme';
 
 const MUSCLE_GROUPS: { label: string; value: MuscleGroup | 'todos' }[] = [
@@ -30,27 +43,55 @@ const MUSCLE_GROUPS: { label: string; value: MuscleGroup | 'todos' }[] = [
   { label: 'Trapézio', value: 'trapezio' },
 ];
 
+const EQUIPMENT_OPTIONS: { label: string; value: Equipment | 'todos' }[] = [
+  { label: 'Todos Equip.', value: 'todos' },
+  { label: 'Barra', value: 'barbell' },
+  { label: 'Halter', value: 'dumbbell' },
+  { label: 'Polia / Cabo', value: 'cable' },
+  { label: 'Máquina', value: 'machine' },
+  { label: 'Smith', value: 'smith' },
+  { label: 'Peso do Corpo', value: 'bodyweight' },
+];
+
 export default function ExercisesScreen() {
   const [search, setSearch] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'todos'>('todos');
-  const { currentWorkout, addExerciseToCurrentWorkout, personalRecords } = useWorkoutStore();
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | 'todos'>('todos');
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // Consulta 100% offline e instantânea no SQLite
+  const { currentWorkout, addExerciseToCurrentWorkout, personalRecords, loadFromDatabase } = useWorkoutStore();
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFromDatabase();
+    }, [loadFromDatabase])
+  );
+
+  // Consulta 100% offline e instantânea no SQLite com filtros de grupo muscular e equipamento
   const exercises = useMemo(() => {
     return getExercises({
       targetMuscle: selectedMuscle,
+      equipment: selectedEquipment,
       search,
     });
-  }, [selectedMuscle, search]);
+  }, [selectedMuscle, selectedEquipment, search]);
 
-  const handleAddToWorkout = (exercise: Exercise) => {
+  const handleOpenExercise = (exercise: Exercise) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSelectedExercise(exercise);
+    setModalVisible(true);
+  };
+
+  const handleQuickAdd = (exercise: Exercise) => {
     if (!currentWorkout) {
       Alert.alert(
         'Nenhum Treino Ativo',
-        'Inicie um treino na aba principal "Treino" para poder adicionar este exercício.'
+        'Inicie um treino na aba principal "Treino" para adicionar este exercício.'
       );
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     addExerciseToCurrentWorkout(exercise);
     Alert.alert('Adicionado!', `"${exercise.name}" foi adicionado ao seu treino ativo.`);
   };
@@ -58,28 +99,30 @@ export default function ExercisesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header Superior */}
         <View style={styles.header}>
-          <Text style={styles.title}>Catálogo de Exercícios</Text>
+          <Text style={styles.title}>Biblioteca de Exercícios</Text>
           <Text style={styles.subtitle}>
-            {exercises.length} movimentos catalogados com especificações biomecânicas
+            {exercises.length} movimentos com curva de força e histórico
           </Text>
         </View>
 
-        {/* Search Input */}
+        {/* Busca Textual em Tempo Real */}
         <View style={styles.searchBar}>
-          <Search size={18} color={Theme.colors.textMuted} />
+          <Search size={16} color={Theme.colors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por nome, variação ou padrão biomecânico..."
+            placeholder="Buscar por nome, variação ou biomecânica..."
             placeholderTextColor={Theme.colors.textMuted}
             value={search}
             onChangeText={setSearch}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
           />
         </View>
 
-        {/* Filter Chips */}
-        <View style={styles.chipsContainer}>
+        {/* Linha 1: Filtros de Grupo Muscular */}
+        <View style={styles.chipsSection}>
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -91,7 +134,11 @@ export default function ExercisesScreen() {
               return (
                 <TouchableOpacity
                   style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setSelectedMuscle(item.value)}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setSelectedMuscle(item.value);
+                  }}
+                  activeOpacity={0.8}
                 >
                   <Text style={[styles.chipText, active && styles.chipTextActive]}>
                     {item.label}
@@ -102,82 +149,125 @@ export default function ExercisesScreen() {
           />
         </View>
 
-        {/* Exercises List */}
+        {/* Linha 2: Filtros de Equipamento */}
+        <View style={styles.chipsSection}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={EQUIPMENT_OPTIONS}
+            keyExtractor={(item) => item.value}
+            contentContainerStyle={styles.chipsList}
+            renderItem={({ item }) => {
+              const active = selectedEquipment === item.value;
+              return (
+                <TouchableOpacity
+                  style={[styles.chipEquipment, active && styles.chipEquipmentActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setSelectedEquipment(item.value);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipEquipmentText, active && styles.chipEquipmentTextActive]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+
+        {/* Lista de Exercícios Filtrados */}
         <FlatList
           data={exercises}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
             const pr = personalRecords[item.id];
 
             return (
-              <View style={styles.exerciseCard}>
+              <TouchableOpacity
+                style={styles.exerciseCard}
+                onPress={() => handleOpenExercise(item)}
+                activeOpacity={0.8}
+              >
                 <View style={styles.cardHeader}>
                   <View style={styles.iconCircle}>
-                    <Dumbbell size={18} color={Theme.colors.text} />
+                    <Dumbbell size={16} color={Theme.colors.primary} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.exerciseName}>{item.name}</Text>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.exerciseName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
                     {item.nameEn && (
-                      <Text style={styles.exerciseNameEn}>{item.nameEn}</Text>
+                      <Text style={styles.exerciseNameEn} numberOfLines={1}>
+                        {item.nameEn}
+                      </Text>
                     )}
+
                     <View style={styles.tagsRow}>
                       <View style={styles.badge}>
                         <Text style={styles.badgeText}>{item.targetMuscle.toUpperCase()}</Text>
                       </View>
-                      <Text style={styles.equipmentText}>• {item.equipment.toUpperCase()}</Text>
-                      <Text style={styles.equipmentText}>
-                        • {item.mechanic === 'compound' ? 'COMPOSTO' : 'ISOLADO'}
-                      </Text>
+                      <View style={styles.badgeEquip}>
+                        <Text style={styles.badgeEquipText}>{item.equipment.toUpperCase()}</Text>
+                      </View>
                       <View style={styles.restTime}>
-                        <Timer size={11} color={Theme.colors.textMuted} />
+                        <Timer size={10} color={Theme.colors.textMuted} />
                         <Text style={styles.restText}>{item.defaultRestSeconds}s</Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Add to workout if active */}
+                  {/* Adicionar Rápido se houver treino ativo */}
                   {currentWorkout && (
                     <TouchableOpacity 
                       style={styles.quickAddBtn}
-                      onPress={() => handleAddToWorkout(item)}
+                      onPress={() => handleQuickAdd(item)}
+                      activeOpacity={0.7}
                     >
-                      <PlusCircle size={22} color={Theme.colors.text} />
+                      <PlusCircle size={22} color={Theme.colors.primary} />
                     </TouchableOpacity>
                   )}
                 </View>
 
-                {/* Sinergistas / Padrão de Movimento */}
-                <View style={styles.detailsRow}>
-                  <View style={styles.patternPill}>
-                    <Activity size={11} color={Theme.colors.textMuted} />
-                    <Text style={styles.patternText}>
-                      {item.movementPattern.replace(/_/g, ' ').toUpperCase()}
-                    </Text>
-                  </View>
-                  {item.synergistMuscles.length > 0 && (
-                    <Text style={styles.synergistsText} numberOfLines={1}>
-                      Sinergistas: {item.synergistMuscles.join(', ')}
-                    </Text>
-                  )}
-                </View>
-
-                {item.instructions ? (
-                  <Text style={styles.description}>{item.instructions}</Text>
-                ) : null}
-
-                {/* PR Banner se o usuário já fez esse exercício */}
+                {/* Banner de Recorde se já houver registro de sobrecarga */}
                 {pr && (
                   <View style={styles.prBanner}>
-                    <Flame size={13} color={Theme.colors.accentTitanium} />
+                    <Flame size={12} color={Theme.colors.primary} />
                     <Text style={styles.prBannerText}>
-                      Recorde Pessoal: <Text style={{ fontWeight: '800' }}>{pr.maxWeightKg}kg</Text> ({pr.repsAtMaxWeight} reps) • 1RM est: {pr.estimated1RM}kg
+                      Recorde Atual: <Text style={styles.prBold}>{pr.maxWeightKg}kg</Text> ({pr.repsAtMaxWeight} reps) • 1RM est: {pr.estimated1RM}kg
                     </Text>
                   </View>
                 )}
-              </View>
+
+                {/* Rodapé do Card: Curva de Força */}
+                <View style={styles.cardFooter}>
+                  <View style={styles.strengthCurveHint}>
+                    <TrendingUp size={12} color={Theme.colors.textSecondary} />
+                    <Text style={styles.strengthCurveText}>Ver curva de força e histórico</Text>
+                  </View>
+                  <ChevronRight size={14} color={Theme.colors.textMuted} />
+                </View>
+              </TouchableOpacity>
             );
           }}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Nenhum exercício encontrado</Text>
+              <Text style={styles.emptySub}>
+                Tente ajustar os filtros de grupo muscular ou equipamento para localizar o movimento.
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Modal de Curva de Força e Especificações do Exercício */}
+        <ExerciseProgressModal
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          exercise={selectedExercise}
         />
       </View>
     </SafeAreaView>
@@ -187,19 +277,19 @@ export default function ExercisesScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: '#09090B',
   },
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 18,
+    paddingTop: 12,
   },
   header: {
     marginBottom: 14,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     color: Theme.colors.text,
     letterSpacing: -0.5,
   },
@@ -212,33 +302,33 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceCard,
+    backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.md,
     paddingHorizontal: 12,
-    height: 44,
+    height: 42,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    gap: 8,
+    gap: 10,
     marginBottom: 10,
   },
   searchInput: {
     flex: 1,
     color: Theme.colors.text,
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '500',
   },
-  chipsContainer: {
-    height: 38,
-    marginBottom: 12,
+  chipsSection: {
+    marginBottom: 8,
   },
   chipsList: {
     gap: 6,
-    alignItems: 'center',
+    paddingVertical: 2,
   },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Theme.colors.surfaceCard,
+    borderRadius: Theme.borderRadius.sm,
+    backgroundColor: '#121215',
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
@@ -254,124 +344,164 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: Theme.colors.textInverse,
   },
+  chipEquipment: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  chipEquipmentActive: {
+    backgroundColor: '#27272A',
+    borderColor: Theme.colors.primary,
+  },
+  chipEquipmentText: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  chipEquipmentTextActive: {
+    color: Theme.colors.text,
+  },
   listContent: {
-    paddingBottom: 30,
-    paddingTop: 4,
+    paddingTop: 6,
+    paddingBottom: 40,
+    gap: 10,
   },
   exerciseCard: {
-    backgroundColor: Theme.colors.surface,
+    backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.md,
     padding: 14,
-    marginBottom: 10,
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: Theme.borderRadius.sm,
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   exerciseName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Theme.colors.text,
+    letterSpacing: -0.2,
   },
   exerciseNameEn: {
     fontSize: 11,
     color: Theme.colors.textMuted,
-    fontStyle: 'italic',
     marginTop: 1,
   },
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
+    marginTop: 6,
   },
   badge: {
     backgroundColor: Theme.colors.surfaceElevated,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
   },
   badgeText: {
+    color: Theme.colors.textSecondary,
     fontSize: 9,
     fontWeight: '800',
-    color: Theme.colors.accentTitanium,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-  equipmentText: {
-    fontSize: 10,
+  badgeEquip: {
+    backgroundColor: '#18181B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  badgeEquipText: {
     color: Theme.colors.textMuted,
+    fontSize: 9,
+    fontWeight: '700',
   },
   restTime: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     marginLeft: 2,
   },
   restText: {
     fontSize: 10,
     color: Theme.colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   quickAddBtn: {
     padding: 4,
   },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  patternPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    gap: 4,
-  },
-  patternText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: Theme.colors.textSecondary,
-  },
-  synergistsText: {
-    fontSize: 10,
-    color: Theme.colors.textMuted,
-    flex: 1,
-  },
-  description: {
-    fontSize: 12,
-    color: Theme.colors.textSecondary,
-    lineHeight: 17,
-    marginTop: 8,
-  },
   prBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceElevated,
-    borderRadius: Theme.borderRadius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginTop: 8,
     gap: 6,
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: Theme.colors.borderLight,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   prBannerText: {
+    color: Theme.colors.textSecondary,
     fontSize: 11,
-    color: Theme.colors.accentTitanium,
-    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    flex: 1,
+  },
+  prBold: {
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+    paddingTop: 8,
+    marginTop: 10,
+  },
+  strengthCurveHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  strengthCurveText: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  emptySub: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+    paddingHorizontal: 20,
   },
 });

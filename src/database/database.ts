@@ -180,6 +180,7 @@ const seedDefaultRoutines = (db: SQLite.SQLiteDatabase) => {
  */
 export const getExercises = (options?: {
   targetMuscle?: MuscleGroup | 'todos';
+  equipment?: Equipment | 'todos';
   search?: string;
   limit?: number;
 }): Exercise[] => {
@@ -190,6 +191,11 @@ export const getExercises = (options?: {
   if (options?.targetMuscle && options.targetMuscle !== 'todos') {
     query += ' AND target_muscle = ?';
     params.push(options.targetMuscle);
+  }
+
+  if (options?.equipment && options.equipment !== 'todos') {
+    query += ' AND equipment = ?';
+    params.push(options.equipment);
   }
 
   if (options?.search && options.search.trim().length > 0) {
@@ -207,6 +213,91 @@ export const getExercises = (options?: {
 
   const rows = db.getAllSync(query, params);
   return rows.map(rowToExercise);
+};
+
+export interface ExerciseProgressPoint {
+  sessionId: string;
+  sessionName: string;
+  date: string;
+  maxWeightKg: number;
+  estimated1RM: number;
+  bestSetReps: number;
+  totalSets: number;
+  totalVolumeKg: number;
+  sets: {
+    setNumber: number;
+    weightKg: number;
+    reps: number;
+    completed: boolean;
+  }[];
+}
+
+/**
+ * Consulta a evolução cronológica de carga máxima e 1RM estimado de um exercício
+ */
+export const getExerciseProgressHistory = (exerciseId: string): ExerciseProgressPoint[] => {
+  const db = getDatabase();
+
+  const sessions = db.getAllSync<{
+    session_id: string;
+    session_name: string;
+    start_time: string;
+    session_exercise_id: string;
+  }>(
+    `SELECT ws.id as session_id, ws.name as session_name, ws.start_time, wse.id as session_exercise_id
+     FROM workout_sessions ws
+     JOIN workout_session_exercises wse ON ws.id = wse.session_id
+     WHERE wse.exercise_id = ? AND ws.is_completed = 1
+     ORDER BY ws.start_time ASC;`,
+    [exerciseId]
+  );
+
+  return sessions.map(s => {
+    const setRows = db.getAllSync<any>(
+      `SELECT set_number, weight_kg, reps, completed 
+       FROM workout_sets 
+       WHERE session_exercise_id = ? AND completed = 1
+       ORDER BY set_number ASC;`,
+      [s.session_exercise_id]
+    );
+
+    let maxWeight = 0;
+    let best1RM = 0;
+    let bestReps = 0;
+    let totalVol = 0;
+
+    const sets = setRows.map(st => {
+      const w = st.weight_kg;
+      const r = st.reps;
+      totalVol += w * r;
+      if (w > maxWeight) {
+        maxWeight = w;
+        bestReps = r;
+      }
+      const est1RM = w > 0 && r > 0 ? w * (1 + r / 30) : 0;
+      if (est1RM > best1RM) {
+        best1RM = Math.round(est1RM * 10) / 10;
+      }
+      return {
+        setNumber: st.set_number,
+        weightKg: w,
+        reps: r,
+        completed: st.completed === 1,
+      };
+    });
+
+    return {
+      sessionId: s.session_id,
+      sessionName: s.session_name,
+      date: s.start_time,
+      maxWeightKg: maxWeight,
+      estimated1RM: best1RM,
+      bestSetReps: bestReps,
+      totalSets: setRows.length,
+      totalVolumeKg: totalVol,
+      sets,
+    };
+  });
 };
 
 export const getExerciseById = (id: string): Exercise | null => {
