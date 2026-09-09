@@ -1,0 +1,6 @@
+{
+  "language": "pt-br",
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  }
+}

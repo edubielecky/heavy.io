@@ -1,0 +1,178 @@
+import { Exercise } from '../types/workout';
+
+export const EXERCISES_DATA: Exercise[] = [
+  // Peito
+  {
+    id: 'supino_reto_barra',
+    name: 'Supino Reto com Barra',
+    muscleGroup: 'peito',
+    secondaryMuscles: ['triceps', 'ombros'],
+    equipment: 'barra',
+    description: 'Exercício rei para construção de peitoral, força em empurrar e estabilidade de ombros.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'supino_inclinado_halteres',
+    name: 'Supino Inclinado com Halteres',
+    muscleGroup: 'peito',
+    secondaryMuscles: ['ombros', 'triceps'],
+    equipment: 'halter',
+    description: 'Foco no feixe clavicular (porção superior) do peitoral maior.',
+    defaultRestSeconds: 90,
+  },
+  {
+    id: 'crucifixo_cabo',
+    name: 'Crucifixo no Crossover',
+    muscleGroup: 'peito',
+    equipment: 'cabo',
+    description: 'Tensão mecânica contínua ao longo de todo o arco de adução dos braços.',
+    defaultRestSeconds: 60,
+  },
+
+  // Costas
+  {
+    id: 'levantamento_terra',
+    name: 'Levantamento Terra (Deadlift)',
+    muscleGroup: 'costas',
+    secondaryMuscles: ['pernas', 'gluteos', 'abdomen'],
+    equipment: 'barra',
+    description: 'Pilar absoluto de força bruta de cadeia posterior e densidade dorsal.',
+    defaultRestSeconds: 180,
+  },
+  {
+    id: 'barra_fixa',
+    name: 'Barra Fixa (Pull-up)',
+    muscleGroup: 'costas',
+    secondaryMuscles: ['biceps'],
+    equipment: 'peso_corporal',
+    description: 'Construção de largura dorsal e controle neuromuscular completo.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'remada_curvada_barra',
+    name: 'Remada Curvada com Barra',
+    muscleGroup: 'costas',
+    secondaryMuscles: ['biceps', 'ombros'],
+    equipment: 'barra',
+    description: 'Densidade dorsal espessa e ativação de trapézios e romboides.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'puxada_alta_cabo',
+    name: 'Puxada Alta (Lat Pulldown)',
+    muscleGroup: 'costas',
+    secondaryMuscles: ['biceps'],
+    equipment: 'cabo',
+    description: 'Excelente para focar no grande dorsal com variação precisa de pegada.',
+    defaultRestSeconds: 90,
+  },
+
+  // Pernas
+  {
+    id: 'agachamento_livre',
+    name: 'Agachamento Livre (Back Squat)',
+    muscleGroup: 'pernas',
+    secondaryMuscles: ['gluteos', 'abdomen'],
+    equipment: 'barra',
+    description: 'O padrão ouro para desenvolvimento de quadríceps, força e potência de membros inferiores.',
+    defaultRestSeconds: 180,
+  },
+  {
+    id: 'leg_press_45',
+    name: 'Leg Press 45º',
+    muscleGroup: 'pernas',
+    secondaryMuscles: ['gluteos'],
+    equipment: 'maquina',
+    description: 'Sobrecarga máxima em quadríceps com segurança lombar guiada.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'stiff_barra',
+    name: 'Stiff com Barra',
+    muscleGroup: 'pernas',
+    secondaryMuscles: ['gluteos', 'costas'],
+    equipment: 'barra',
+    description: 'Alongamento sob carga extrema dos isquiotibiais e glúteos.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'cadeira_extensora',
+    name: 'Cadeira Extensora',
+    muscleGroup: 'pernas',
+    equipment: 'maquina',
+    description: 'Isolamento completo do reto femoral e vastos na fase concêntrica máxima.',
+    defaultRestSeconds: 60,
+  },
+  {
+    id: 'mesa_flexora',
+    name: 'Mesa Flexora',
+    muscleGroup: 'pernas',
+    equipment: 'maquina',
+    description: 'Isolamento de flexão do joelho para posteriores de coxa.',
+    defaultRestSeconds: 60,
+  },
+
+  // Ombros
+  {
+    id: 'desenvolvimento_militar',
+    name: 'Desenvolvimento Militar com Barra (OHP)',
+    muscleGroup: 'ombros',
+    secondaryMuscles: ['triceps', 'abdomen'],
+    equipment: 'barra',
+    description: 'Força vertical acima da cabeça (Overhead Press) para deltóides robustos.',
+    defaultRestSeconds: 120,
+  },
+  {
+    id: 'elevacao_lateral_halteres',
+    name: 'Elevação Lateral com Halteres',
+    muscleGroup: 'ombros',
+    equipment: 'halter',
+    description: 'Largura do tronco e aspecto 3D da cabeça medial do deltóide.',
+    defaultRestSeconds: 60,
+  },
+
+  // Braços (Bíceps & Tríceps)
+  {
+    id: 'rosca_direta_barra_w',
+    name: 'Rosca Direta Barra W',
+    muscleGroup: 'biceps',
+    equipment: 'barra',
+    description: 'Construção maciça do bíceps braquial e braquiorradial.',
+    defaultRestSeconds: 90,
+  },
+  {
+    id: 'triceps_corda_polia',
+    name: 'Tríceps Corda no Crossover',
+    muscleGroup: 'triceps',
+    equipment: 'cabo',
+    description: 'Pico de contração e abertura ao final do movimento da cabeça lateral.',
+    defaultRestSeconds: 60,
+  },
+  {
+    id: 'paralelas',
+    name: 'Mergulho nas Paralelas (Dips)',
+    muscleGroup: 'triceps',
+    secondaryMuscles: ['peito', 'ombros'],
+    equipment: 'peso_corporal',
+    description: 'Grande sobrecarga funcional no tríceps e peitoral inferior.',
+    defaultRestSeconds: 120,
+  },
+
+  // Panturrilhas & Abdômen
+  {
+    id: 'panturrilha_em_pe',
+    name: 'Gêmeos em Pé (Panturrilha)',
+    muscleGroup: 'panturrilhas',
+    equipment: 'maquina',
+    description: 'Ativação máxima do gastrocnêmio sob flexão plantar completa.',
+    defaultRestSeconds: 60,
+  },
+  {
+    id: 'ab_wheel',
+    name: 'Roda Abdominal (Ab Wheel)',
+    muscleGroup: 'abdomen',
+    equipment: 'outros',
+    description: 'Antiextensão brutal do core com estabilidade global.',
+    defaultRestSeconds: 90,
+  },
+];
