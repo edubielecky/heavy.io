@@ -71,6 +71,7 @@ interface WorkoutStoreState {
   // Ações de Exercício
   addExerciseToCurrentWorkout: (exercise: Exercise) => void;
   removeExerciseFromCurrentWorkout: (workoutExerciseId: string) => void;
+  swapExerciseInCurrentWorkout: (workoutExerciseId: string, newExercise: Exercise) => void;
   
   // Ações de Séries (Sets)
   addSet: (workoutExerciseId: string, type?: SetType) => void;
@@ -382,6 +383,60 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           currentWorkout: updatedSession,
           focusedExerciseId: nextFocus,
         });
+      },
+
+      swapExerciseInCurrentWorkout: (workoutExerciseId: string, newExercise: Exercise) => {
+        const { currentWorkout } = get();
+        if (!currentWorkout) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+        // 1. Busca desempenho anterior (fantasma) do novo exercício
+        let lastPerf: any = null;
+        try {
+          lastPerf = getLastExercisePerformance(newExercise.id);
+        } catch (e) {
+          console.error('Erro ao buscar histórico do novo exercício:', e);
+        }
+
+        const updatedExercises = currentWorkout.exercises.map(we => {
+          if (we.id !== workoutExerciseId) return we;
+
+          // Atualiza as séries abertas com as cargas fantasma do novo exercício
+          const updatedSets = we.sets.map((s, sIdx) => {
+            if (s.completed) return s;
+            const ghostSet = lastPerf?.sets?.[sIdx];
+            return {
+              ...s,
+              weightKg: ghostSet ? ghostSet.weightKg : (lastPerf?.bestWeightKg || 0),
+              reps: ghostSet ? ghostSet.reps : 10,
+              rpe: ghostSet?.rpe,
+              rir: ghostSet?.rir,
+            };
+          });
+
+          return {
+            ...we,
+            exerciseId: newExercise.id,
+            exerciseName: newExercise.name,
+            targetMuscle: newExercise.targetMuscle,
+            sets: updatedSets,
+          };
+        });
+
+        const updatedSession: WorkoutSession = {
+          ...currentWorkout,
+          exercises: updatedExercises,
+        };
+
+        try {
+          saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
+        } catch (err) {
+          console.error('Erro ao trocar exercício no SQLite:', err);
+        }
+
+        set({ currentWorkout: updatedSession });
       },
 
       addSet: (workoutExerciseId: string, type: SetType = 'normal') => {

@@ -21,6 +21,8 @@ export interface UserProfile {
   preferredDaysPerWeek?: number;
   bodyWeightKg?: number;
   heightCm?: number;
+  equipmentEnvironment?: 'commercial' | 'condo' | 'home_dumbbells';
+  physicalRestrictions?: ('shoulders' | 'lower_back' | 'knees' | 'none')[];
   createdAt?: string;
 }
 

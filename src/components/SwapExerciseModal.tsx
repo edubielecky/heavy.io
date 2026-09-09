@@ -8,22 +8,29 @@ import {
   FlatList,
   TextInput,
   SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Search, RefreshCw, Check, Dumbbell, ShieldCheck } from 'lucide-react-native';
+import { X, Search, RefreshCw, Dumbbell, ShieldCheck } from 'lucide-react-native';
 import Theme from '../theme/theme';
-import { Exercise } from '../types/workout';
+import { Exercise, Equipment } from '../types/workout';
 import {
   GuidedInputs,
   PlannedExercise,
   getBiomechanicSubstitutes,
 } from '../services/recommendationEngine';
+import { useUserStore } from '../store/userStore';
+
+export interface SwapExerciseTarget {
+  exerciseId: string;
+  exerciseName: string;
+}
 
 interface SwapExerciseModalProps {
   visible: boolean;
   onClose: () => void;
-  currentExercise: PlannedExercise | null;
-  guidedInputs: GuidedInputs;
+  currentExercise: SwapExerciseTarget | PlannedExercise | null;
+  guidedInputs?: Partial<GuidedInputs>;
   onSelectSubstitute: (substitute: Exercise) => void;
 }
 
@@ -35,12 +42,20 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
   onSelectSubstitute,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [equipmentFilter, setEquipmentFilter] = useState<Equipment | 'all'>('all');
 
-  // Busca os substitutos compatíveis com o algoritmo
+  const userProfile = useUserStore(s => s.profile);
+
+  // Busca os substitutos compatíveis cruzando biomecânica e disponibilidade de aparelhos
   const substitutes = useMemo(() => {
     if (!currentExercise) return [];
-    return getBiomechanicSubstitutes(currentExercise.exerciseId, guidedInputs);
-  }, [currentExercise, guidedInputs]);
+    const effectiveInputs: Partial<GuidedInputs> = {
+      equipment: guidedInputs?.equipment || userProfile?.equipmentEnvironment || 'commercial',
+      restrictions: guidedInputs?.restrictions || userProfile?.physicalRestrictions || [],
+      ...guidedInputs,
+    };
+    return getBiomechanicSubstitutes(currentExercise.exerciseId, effectiveInputs, equipmentFilter);
+  }, [currentExercise, guidedInputs, userProfile, equipmentFilter]);
 
   // Filtro de busca textual adicional
   const filteredSubstitutes = useMemo(() => {
@@ -61,6 +76,13 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
 
   if (!currentExercise) return null;
 
+  const currentGymEnv = guidedInputs?.equipment || userProfile?.equipmentEnvironment || 'commercial';
+  const gymEnvLabel = currentGymEnv === 'home_dumbbells' 
+    ? 'Halteres & Peso Livre' 
+    : currentGymEnv === 'condo' 
+    ? 'Academia de Condomínio' 
+    : 'Academia Completa';
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <SafeAreaView style={styles.modalOverlay}>
@@ -70,7 +92,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             <View style={styles.titleArea}>
               <View style={styles.badgeRow}>
                 <RefreshCw size={12} color={Theme.colors.primary} />
-                <Text style={styles.badgeText}>SUBSTITUIÇÃO BIOMECÂNICA</Text>
+                <Text style={styles.badgeText}>SUBSTITUIÇÃO INTELIGENTE</Text>
               </View>
               <Text style={styles.modalTitle}>Trocar Exercício</Text>
               <Text style={styles.modalSub}>
@@ -88,7 +110,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             <Search size={16} color={Theme.colors.textMuted} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar entre os substitutos equivalentes..."
+              placeholder="Buscar por nome ou substituto..."
               placeholderTextColor={Theme.colors.textMuted}
               value={searchTerm}
               onChangeText={setSearchTerm}
@@ -97,11 +119,45 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             />
           </View>
 
-          {/* Safety Badge */}
+          {/* Filtros de Aparelhos da Academia */}
+          <View style={styles.filterPillsContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.filterPillsScroll}
+            >
+              {[
+                { label: 'TODOS', value: 'all' as const },
+                { label: 'HALTERES', value: 'dumbbell' as const },
+                { label: 'BARRA', value: 'barbell' as const },
+                { label: 'MÁQUINAS / CABOS', value: 'machine' as const },
+                { label: 'PESO DO CORPO', value: 'bodyweight' as const },
+              ].map(pill => {
+                const isActive = equipmentFilter === pill.value;
+                return (
+                  <TouchableOpacity
+                    key={pill.value}
+                    style={[styles.filterPill, isActive && styles.filterPillActive]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setEquipmentFilter(pill.value);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                      {pill.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Safety & Environment Badge */}
           <View style={styles.safetyInfo}>
-            <ShieldCheck size={14} color={Theme.colors.success} />
+            <ShieldCheck size={14} color="#10B981" />
             <Text style={styles.safetyInfoText}>
-              Apenas exercícios compatíveis com seus equipamentos e restrições articulares.
+              Substitutos equivalentes filtrados para <Text style={{ color: Theme.colors.text, fontWeight: '700' }}>{gymEnvLabel}</Text>.
             </Text>
           </View>
 
@@ -113,9 +169,9 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Nenhum substituto encontrado</Text>
+                <Text style={styles.emptyTitle}>Nenhum substituto compatível encontrado</Text>
                 <Text style={styles.emptySub}>
-                  Tente alterar o termo de busca para localizar outro exercício.
+                  Tente alterar o filtro de aparelho ou o termo de busca para localizar outro exercício.
                 </Text>
               </View>
             }
@@ -133,8 +189,20 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
                     <View style={styles.tag}>
                       <Text style={styles.tagText}>{item.targetMuscle.toUpperCase()}</Text>
                     </View>
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>{item.equipment.toUpperCase()}</Text>
+                    <View style={[styles.tag, styles.tagEquipment]}>
+                      <Text style={[styles.tagText, styles.tagEquipmentText]}>
+                        {item.equipment === 'dumbbell'
+                          ? 'HALTERES'
+                          : item.equipment === 'barbell'
+                          ? 'BARRA'
+                          : item.equipment === 'machine'
+                          ? 'MÁQUINA'
+                          : item.equipment === 'cable'
+                          ? 'CABO'
+                          : item.equipment === 'smith'
+                          ? 'SMITH'
+                          : 'LIVRE'}
+                      </Text>
                     </View>
                     <View style={styles.tag}>
                       <Text style={styles.tagText}>
@@ -145,7 +213,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
                 </View>
 
                 <View style={styles.selectAction}>
-                  <Text style={styles.selectActionText}>Selecionar</Text>
+                  <Text style={styles.selectActionText}>Trocar</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -176,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   titleArea: {
     flex: 1,
@@ -235,19 +303,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  filterPillsContainer: {
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  filterPillsScroll: {
+    paddingHorizontal: 18,
+    gap: 6,
+  },
+  filterPill: {
+    backgroundColor: '#121215',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  filterPillActive: {
+    backgroundColor: Theme.colors.primary,
+    borderColor: Theme.colors.primary,
+  },
+  filterPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  filterPillTextActive: {
+    color: '#09090B',
+  },
   safetyInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 18,
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 8,
     backgroundColor: '#121215',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.2)',
+    borderColor: '#27272A',
   },
   safetyInfoText: {
     fontSize: 11,
@@ -256,75 +353,90 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 18,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 40,
-    gap: 10,
   },
   exerciseCard: {
-    backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#121215',
+    borderRadius: Theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
   cardMain: {
     flex: 1,
     paddingRight: 10,
   },
   exName: {
-    color: Theme.colors.text,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    color: Theme.colors.text,
   },
   exNameEn: {
-    color: Theme.colors.textMuted,
     fontSize: 11,
-    marginTop: 2,
+    color: Theme.colors.textMuted,
+    marginTop: 1,
   },
   tagsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
     marginTop: 8,
   },
   tag: {
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  tagEquipment: {
+    borderColor: '#3F3F46',
   },
   tagText: {
-    color: Theme.colors.textSecondary,
     fontSize: 9,
     fontWeight: '700',
+    color: Theme.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  tagEquipmentText: {
+    color: Theme.colors.primary,
   },
   selectAction: {
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: Theme.colors.surfaceElevated,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
   },
   selectActionText: {
-    color: Theme.colors.textInverse,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
+    color: Theme.colors.text,
+    letterSpacing: 0.3,
   },
   emptyState: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 40,
   },
   emptyTitle: {
-    color: Theme.colors.text,
     fontSize: 14,
     fontWeight: '700',
+    color: Theme.colors.textSecondary,
+    marginBottom: 4,
   },
   emptySub: {
-    color: Theme.colors.textMuted,
     fontSize: 12,
+    color: Theme.colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
+    paddingHorizontal: 20,
   },
 });

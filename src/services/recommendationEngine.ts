@@ -529,29 +529,58 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
 
 /**
  * Busca substitutos biomecanicamente equivalentes para um exercício,
- * respeitando as restrições articulares e o ambiente de equipamento do usuário.
+ * respeitando rigorosamente as restrições articulares, o ambiente de equipamento da academia
+ * e opcionalmente um filtro específico de aparelho selecionado pelo usuário (ex: 'dumbbell', 'barbell', 'machine', 'cable').
  */
 export const getBiomechanicSubstitutes = (
   currentExerciseId: string,
-  inputs: GuidedInputs
+  inputs?: Partial<GuidedInputs>,
+  equipmentFilter?: Equipment | 'all'
 ): Exercise[] => {
-  const available = getAvailableExercises(inputs);
+  const effectiveInputs: GuidedInputs = {
+    frequency: inputs?.frequency || 4,
+    sessionDuration: inputs?.sessionDuration || '45-60',
+    goal: inputs?.goal || 'hypertrophy',
+    experienceLevel: inputs?.experienceLevel || 'intermediate',
+    equipment: inputs?.equipment || 'commercial',
+    restrictions: inputs?.restrictions || [],
+  };
+
+  const available = getAvailableExercises(effectiveInputs);
   const current = available.find(e => e.id === currentExerciseId) ||
     SEED_EXERCISES.find(e => e.id === currentExerciseId);
 
-  if (!current) {
-    return available.filter(e => e.id !== currentExerciseId).slice(0, 10);
-  }
-
-  return available.filter(ex => {
+  let candidates = available.filter(ex => {
     if (ex.id === currentExerciseId) return false;
 
-    // 1. Mesmo grupamento muscular alvo
-    const isSameMuscle = ex.targetMuscle === current.targetMuscle;
+    // Se o usuário filtrou por um aparelho específico no modal
+    if (equipmentFilter && equipmentFilter !== 'all') {
+      if (equipmentFilter === 'machine') {
+        if (ex.equipment !== 'machine' && ex.equipment !== 'cable' && ex.equipment !== 'smith') {
+          return false;
+        }
+      } else if (ex.equipment !== equipmentFilter) {
+        return false;
+      }
+    }
 
-    // 2. Ou mesmo padrão de movimento
-    const isSamePattern = ex.movementPattern === current.movementPattern;
+    // 1. Mesmo grupamento muscular alvo
+    const isSameMuscle = current ? ex.targetMuscle === current.targetMuscle : true;
+
+    // 2. Ou mesmo padrão biomecânico de movimento
+    const isSamePattern = current ? ex.movementPattern === current.movementPattern : false;
 
     return isSameMuscle || isSamePattern;
   });
+
+  // Se o exercício atual for composto, prioriza outros compostos no topo da lista
+  if (current?.mechanic === 'compound') {
+    candidates.sort((a, b) => {
+      if (a.mechanic === 'compound' && b.mechanic !== 'compound') return -1;
+      if (a.mechanic !== 'compound' && b.mechanic === 'compound') return 1;
+      return 0;
+    });
+  }
+
+  return candidates;
 };

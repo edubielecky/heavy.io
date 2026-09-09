@@ -1,11 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Plus, Trash2, Dumbbell, TrendingUp, ShieldAlert, Activity } from 'lucide-react-native';
+import { Plus, Trash2, Dumbbell, TrendingUp, ShieldAlert, Activity, RefreshCw } from 'lucide-react-native';
 import { WorkoutExercise } from '../types/workout';
 import { SetRow } from './SetRow';
 import { useWorkoutStore } from '../store/workoutStore';
 import { getLastExercisePerformance } from '../database/database';
 import { calculateProgressiveOverload } from '../services/progressiveOverloadEngine';
+import { SwapExerciseModal } from './SwapExerciseModal';
 import Theme from '../theme/theme';
 
 interface WorkoutExerciseCardProps {
@@ -21,11 +22,14 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
     updateSet, 
     toggleSetCompleted, 
     removeExerciseFromCurrentWorkout,
+    swapExerciseInCurrentWorkout,
     applyOverloadRecommendation,
     personalRecords,
     focusedExerciseId,
     setFocusedExercise
   } = useWorkoutStore();
+
+  const [isSwapModalVisible, setIsSwapModalVisible] = useState(false);
 
   const pr = personalRecords[workoutExercise.exerciseId];
   const isFocused = focusedExerciseId === workoutExercise.id;
@@ -97,12 +101,25 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={styles.deleteExerciseBtn}
-          onPress={() => removeExerciseFromCurrentWorkout(workoutExercise.id)}
-        >
-          <Trash2 size={18} color={Theme.colors.danger} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerActionBtn}
+            onPress={() => setIsSwapModalVisible(true)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <RefreshCw size={16} color={Theme.colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.deleteExerciseBtn}
+            onPress={() => removeExerciseFromCurrentWorkout(workoutExercise.id)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Trash2 size={16} color={Theme.colors.danger} />
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
 
       {/* Banner de Sobrecarga Progressiva & Consolidação Técnica */}
@@ -200,6 +217,19 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
         <Plus size={16} color={Theme.colors.primary} />
         <Text style={styles.addSetText}>Adicionar Série</Text>
       </TouchableOpacity>
+
+      {/* Modal de Troca Rápida de Exercício */}
+      <SwapExerciseModal
+        visible={isSwapModalVisible}
+        onClose={() => setIsSwapModalVisible(false)}
+        currentExercise={{
+          exerciseId: workoutExercise.exerciseId,
+          exerciseName: workoutExercise.exerciseName,
+        }}
+        onSelectSubstitute={(substitute) => {
+          swapExerciseInCurrentWorkout(workoutExercise.id, substitute);
+        }}
+      />
     </View>
   );
 };
@@ -302,6 +332,15 @@ const styles = StyleSheet.create({
     color: Theme.colors.primary,
     fontSize: 11,
     fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerActionBtn: {
+    padding: 8,
+    borderRadius: Theme.borderRadius.sm,
   },
   deleteExerciseBtn: {
     padding: 8,
