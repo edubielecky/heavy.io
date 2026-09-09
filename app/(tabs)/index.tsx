@@ -32,6 +32,7 @@ import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
 import { RoutineManagementModal } from '../../src/components/RoutineManagementModal';
 import { getExerciseById, getRoutines, getActiveProgram, getSessionPRs } from '../../src/database/database';
 import { Routine, WorkoutSession, PersonalRecord, WorkoutProgram } from '../../src/types/workout';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Theme from '../../src/theme/theme';
 
 export default function WorkoutScreen() {
@@ -80,10 +81,13 @@ export default function WorkoutScreen() {
     }, [loadFromDatabase, loadRoutinesAndProgram])
   );
 
-  // Timer de duração do treino ativo
+  // Timer de duração do treino ativo e controle de Wake Lock (Keep Awake)
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
     if (currentWorkout) {
+      // Impede que a tela apague durante as séries e descansos
+      activateKeepAwakeAsync().catch(() => {});
+
       const startMs = new Date(currentWorkout.startTime).getTime();
       const updateElapsed = () => {
         const nowMs = Date.now();
@@ -92,10 +96,12 @@ export default function WorkoutScreen() {
       updateElapsed();
       timer = setInterval(updateElapsed, 1000);
     } else {
+      deactivateKeepAwake().catch(() => {});
       setElapsedSeconds(0);
     }
     return () => {
       if (timer) clearInterval(timer);
+      deactivateKeepAwake().catch(() => {});
     };
   }, [currentWorkout]);
 
