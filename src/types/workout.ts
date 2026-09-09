@@ -1,31 +1,64 @@
 export type MuscleGroup = 
   | 'peito' 
   | 'costas' 
-  | 'pernas' 
+  | 'quadriceps' 
+  | 'isquiotibiais' 
+  | 'gluteos' 
   | 'ombros' 
   | 'biceps' 
   | 'triceps' 
-  | 'abdomen' 
-  | 'gluteos' 
+  | 'antibraco' 
   | 'panturrilhas' 
-  | 'composto';
+  | 'abdomen' 
+  | 'lombar' 
+  | 'trapezio';
 
 export type Equipment = 
-  | 'barra' 
-  | 'halter' 
-  | 'maquina' 
-  | 'cabo' 
-  | 'peso_corporal' 
-  | 'outros';
+  | 'barbell' 
+  | 'dumbbell' 
+  | 'cable' 
+  | 'machine' 
+  | 'bodyweight' 
+  | 'smith' 
+  | 'kettlebell' 
+  | 'other';
+
+export type MovementPattern = 
+  | 'horizontal_push' 
+  | 'vertical_push' 
+  | 'horizontal_pull' 
+  | 'vertical_pull' 
+  | 'squat' 
+  | 'hinge' 
+  | 'lunge' 
+  | 'isolation' 
+  | 'carry' 
+  | 'core_anti_extension' 
+  | 'core_rotation' 
+  | 'calf_raise';
+
+export type PlaneOfMotion = 
+  | 'sagittal' 
+  | 'frontal' 
+  | 'transverse' 
+  | 'multiplanar';
+
+export type ExerciseMechanic = 'compound' | 'isolation';
 
 export interface Exercise {
   id: string;
   name: string;
-  muscleGroup: MuscleGroup;
-  secondaryMuscles?: MuscleGroup[];
+  nameEn?: string;
+  targetMuscle: MuscleGroup;
+  synergistMuscles: string[];
+  movementPattern: MovementPattern;
+  mechanic: ExerciseMechanic;
   equipment: Equipment;
-  description?: string;
+  planeOfMotion?: PlaneOfMotion;
   defaultRestSeconds: number;
+  isCustom: boolean;
+  instructions?: string;
+  createdAt?: string;
 }
 
 export type SetType = 'warmup' | 'normal' | 'drop' | 'failure';
@@ -37,20 +70,23 @@ export interface WorkoutSet {
   weightKg: number;
   reps: number;
   rpe?: number; // Rate of Perceived Exertion (6 a 10)
+  rir?: number; // Reps In Reserve (0 a 4)
   completed: boolean;
+  completedAt?: string;
 }
 
 export interface WorkoutExercise {
   id: string;
   exerciseId: string;
   exerciseName: string;
-  muscleGroup: MuscleGroup;
+  targetMuscle: MuscleGroup;
   sets: WorkoutSet[];
   notes?: string;
 }
 
 export interface WorkoutSession {
   id: string;
+  routineId?: string;
   name: string;
   startTime: string;
   endTime?: string;
@@ -59,6 +95,30 @@ export interface WorkoutSession {
   totalTonnageKg: number;
   totalSets: number;
   isCompleted: boolean;
+  notes?: string;
+}
+
+export interface RoutineExerciseItem {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  targetMuscle: MuscleGroup;
+  orderIndex: number;
+  targetSets: number;
+  targetRepsMin: number;
+  targetRepsMax: number;
+  restSeconds: number;
+  notes?: string;
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  description?: string;
+  isSystem: boolean;
+  exercises: RoutineExerciseItem[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PersonalRecord {
@@ -66,7 +126,8 @@ export interface PersonalRecord {
   exerciseName: string;
   maxWeightKg: number;
   repsAtMaxWeight: number;
-  estimated1RM: number; // Brzycki formula: weight / (1.0278 - (0.0278 * reps))
+  estimated1RM: number; // Fórmula de Epley: weight * (1 + reps / 30)
+  achievedSessionId?: string;
   achievedAt: string;
 }
 

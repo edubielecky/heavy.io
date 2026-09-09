@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -9,8 +9,8 @@ import {
   SafeAreaView, 
   Alert 
 } from 'react-native';
-import { Search, Dumbbell, Timer, Flame, PlusCircle } from 'lucide-react-native';
-import { EXERCISES_DATA } from '../../src/data/exercisesData';
+import { Search, Dumbbell, Timer, Flame, PlusCircle, Activity } from 'lucide-react-native';
+import { getExercises } from '../../src/database/database';
 import { Exercise, MuscleGroup } from '../../src/types/workout';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import Theme from '../../src/theme/theme';
@@ -19,12 +19,15 @@ const MUSCLE_GROUPS: { label: string; value: MuscleGroup | 'todos' }[] = [
   { label: 'Todos', value: 'todos' },
   { label: 'Peito', value: 'peito' },
   { label: 'Costas', value: 'costas' },
-  { label: 'Pernas', value: 'pernas' },
+  { label: 'Quadríceps', value: 'quadriceps' },
+  { label: 'Posteriores', value: 'isquiotibiais' },
+  { label: 'Glúteos', value: 'gluteos' },
   { label: 'Ombros', value: 'ombros' },
   { label: 'Bíceps', value: 'biceps' },
   { label: 'Tríceps', value: 'triceps' },
   { label: 'Abdômen', value: 'abdomen' },
   { label: 'Panturrilhas', value: 'panturrilhas' },
+  { label: 'Trapézio', value: 'trapezio' },
 ];
 
 export default function ExercisesScreen() {
@@ -32,11 +35,13 @@ export default function ExercisesScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'todos'>('todos');
   const { currentWorkout, addExerciseToCurrentWorkout, personalRecords } = useWorkoutStore();
 
-  const filteredExercises = EXERCISES_DATA.filter((ex) => {
-    const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
-    const matchesMuscle = selectedMuscle === 'todos' || ex.muscleGroup === selectedMuscle;
-    return matchesSearch && matchesMuscle;
-  });
+  // Consulta 100% offline e instantânea no SQLite
+  const exercises = useMemo(() => {
+    return getExercises({
+      targetMuscle: selectedMuscle,
+      search,
+    });
+  }, [selectedMuscle, search]);
 
   const handleAddToWorkout = (exercise: Exercise) => {
     if (!currentWorkout) {
@@ -55,8 +60,10 @@ export default function ExercisesScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Biblioteca de Exercícios</Text>
-          <Text style={styles.subtitle}>Biomecânica e padrões de movimento de força</Text>
+          <Text style={styles.title}>Catálogo de Exercícios</Text>
+          <Text style={styles.subtitle}>
+            {exercises.length} movimentos catalogados com especificações biomecânicas
+          </Text>
         </View>
 
         {/* Search Input */}
@@ -64,7 +71,7 @@ export default function ExercisesScreen() {
           <Search size={18} color={Theme.colors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por nome ou músculo..."
+            placeholder="Buscar por nome, variação ou padrão biomecânico..."
             placeholderTextColor={Theme.colors.textMuted}
             value={search}
             onChangeText={setSearch}
@@ -97,7 +104,7 @@ export default function ExercisesScreen() {
 
         {/* Exercises List */}
         <FlatList
-          data={filteredExercises}
+          data={exercises}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {
@@ -107,17 +114,23 @@ export default function ExercisesScreen() {
               <View style={styles.exerciseCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.iconCircle}>
-                    <Dumbbell size={20} color={Theme.colors.primary} />
+                    <Dumbbell size={18} color={Theme.colors.text} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.exerciseName}>{item.name}</Text>
+                    {item.nameEn && (
+                      <Text style={styles.exerciseNameEn}>{item.nameEn}</Text>
+                    )}
                     <View style={styles.tagsRow}>
                       <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{item.muscleGroup.toUpperCase()}</Text>
+                        <Text style={styles.badgeText}>{item.targetMuscle.toUpperCase()}</Text>
                       </View>
                       <Text style={styles.equipmentText}>• {item.equipment.toUpperCase()}</Text>
+                      <Text style={styles.equipmentText}>
+                        • {item.mechanic === 'compound' ? 'COMPOSTO' : 'ISOLADO'}
+                      </Text>
                       <View style={styles.restTime}>
-                        <Timer size={12} color={Theme.colors.textMuted} />
+                        <Timer size={11} color={Theme.colors.textMuted} />
                         <Text style={styles.restText}>{item.defaultRestSeconds}s</Text>
                       </View>
                     </View>
@@ -129,19 +142,34 @@ export default function ExercisesScreen() {
                       style={styles.quickAddBtn}
                       onPress={() => handleAddToWorkout(item)}
                     >
-                      <PlusCircle size={24} color={Theme.colors.primary} />
+                      <PlusCircle size={22} color={Theme.colors.text} />
                     </TouchableOpacity>
                   )}
                 </View>
 
-                {item.description ? (
-                  <Text style={styles.description}>{item.description}</Text>
+                {/* Sinergistas / Padrão de Movimento */}
+                <View style={styles.detailsRow}>
+                  <View style={styles.patternPill}>
+                    <Activity size={11} color={Theme.colors.textMuted} />
+                    <Text style={styles.patternText}>
+                      {item.movementPattern.replace(/_/g, ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                  {item.synergistMuscles.length > 0 && (
+                    <Text style={styles.synergistsText} numberOfLines={1}>
+                      Sinergistas: {item.synergistMuscles.join(', ')}
+                    </Text>
+                  )}
+                </View>
+
+                {item.instructions ? (
+                  <Text style={styles.description}>{item.instructions}</Text>
                 ) : null}
 
                 {/* PR Banner se o usuário já fez esse exercício */}
                 {pr && (
                   <View style={styles.prBanner}>
-                    <Flame size={14} color={Theme.colors.accentFlame} />
+                    <Flame size={13} color={Theme.colors.accentTitanium} />
                     <Text style={styles.prBannerText}>
                       Recorde Pessoal: <Text style={{ fontWeight: '800' }}>{pr.maxWeightKg}kg</Text> ({pr.repsAtMaxWeight} reps) • 1RM est: {pr.estimated1RM}kg
                     </Text>
@@ -163,15 +191,15 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 10,
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 22,
+    fontWeight: '800',
     color: Theme.colors.text,
     letterSpacing: -0.5,
   },
@@ -187,11 +215,11 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surfaceCard,
     borderRadius: Theme.borderRadius.md,
     paddingHorizontal: 12,
-    height: 46,
+    height: 44,
     borderWidth: 1,
     borderColor: Theme.colors.border,
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
@@ -199,16 +227,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   chipsContainer: {
-    height: 40,
+    height: 38,
     marginBottom: 12,
   },
   chipsList: {
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
   },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: Theme.borderRadius.full,
     backgroundColor: Theme.colors.surfaceCard,
     borderWidth: 1,
@@ -220,7 +248,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: Theme.colors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   chipTextActive: {
@@ -232,84 +260,118 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    alignItems: 'flex-start',
+    gap: 10,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: Theme.borderRadius.md,
+    width: 36,
+    height: 36,
+    borderRadius: Theme.borderRadius.sm,
     backgroundColor: Theme.colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
   exerciseName: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: Theme.colors.text,
+  },
+  exerciseNameEn: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 1,
   },
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 4,
   },
   badge: {
     backgroundColor: Theme.colors.surfaceElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: 4,
   },
   badgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: Theme.colors.primary,
+    color: Theme.colors.accentTitanium,
     letterSpacing: 0.5,
   },
   equipmentText: {
-    fontSize: 11,
+    fontSize: 10,
     color: Theme.colors.textMuted,
   },
   restTime: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginLeft: 4,
+    marginLeft: 2,
   },
   restText: {
-    fontSize: 11,
+    fontSize: 10,
     color: Theme.colors.textMuted,
   },
   quickAddBtn: {
     padding: 4,
   },
-  description: {
-    fontSize: 13,
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  patternPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 4,
+  },
+  patternText: {
+    fontSize: 9,
+    fontWeight: '700',
     color: Theme.colors.textSecondary,
-    lineHeight: 18,
-    marginTop: 10,
+  },
+  synergistsText: {
+    fontSize: 10,
+    color: Theme.colors.textMuted,
+    flex: 1,
+  },
+  description: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    lineHeight: 17,
+    marginTop: 8,
   },
   prBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.accentFlameMuted,
+    backgroundColor: Theme.colors.surfaceElevated,
     borderRadius: Theme.borderRadius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 8,
     gap: 6,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
   },
   prBannerText: {
     fontSize: 11,
-    color: Theme.colors.accentFlame,
-    fontWeight: '600',
+    color: Theme.colors.accentTitanium,
+    fontWeight: '500',
   },
 });

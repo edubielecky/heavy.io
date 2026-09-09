@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView } from 'react-native';
 import { Calendar, Clock, Dumbbell, Weight, Trophy } from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import Theme from '../../src/theme/theme';
 
 export default function HistoryScreen() {
-  const { workoutHistory } = useWorkoutStore();
+  const { workoutHistory, loadFromDatabase } = useWorkoutStore();
+
+  useEffect(() => {
+    loadFromDatabase();
+  }, []);
 
   const totalVolumeAllTime = workoutHistory.reduce((acc, curr) => acc + curr.totalTonnageKg, 0);
 

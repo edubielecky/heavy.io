@@ -39,7 +39,7 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
             <View style={styles.subHeader}>
               <View style={styles.muscleBadge}>
                 <Text style={styles.muscleText}>
-                  {workoutExercise.muscleGroup.toUpperCase()}
+                  {workoutExercise.targetMuscle.toUpperCase()}
                 </Text>
               </View>
               {pr && (

@@ -23,7 +23,7 @@ import { useWorkoutStore } from '../../src/store/workoutStore';
 import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
 import { AddExerciseModal } from '../../src/components/AddExerciseModal';
 import { RestTimerBar } from '../../src/components/RestTimerBar';
-import { EXERCISES_DATA } from '../../src/data/exercisesData';
+import { getExerciseById } from '../../src/database/database';
 import Theme from '../../src/theme/theme';
 
 export default function WorkoutScreen() {
@@ -94,7 +94,7 @@ export default function WorkoutScreen() {
     // Adicionar exercícios do template
     setTimeout(() => {
       exerciseIds.forEach(id => {
-        const ex = EXERCISES_DATA.find(e => e.id === id);
+        const ex = getExerciseById(id);
         if (ex) addExerciseToCurrentWorkout(ex);
       });
     }, 50);
@@ -115,7 +115,7 @@ export default function WorkoutScreen() {
               <Text style={styles.brandSubtitle}>FORÇA & HIPERTROFIA</Text>
             </View>
             <View style={styles.badgePro}>
-              <Flame size={14} color={Theme.colors.accentFlame} />
+              <Flame size={14} color={Theme.colors.accentTitanium} />
               <Text style={styles.badgeProText}>MODO FORÇA</Text>
             </View>
           </View>
@@ -127,7 +127,7 @@ export default function WorkoutScreen() {
               <Text style={styles.statLabel}>Treinos Feitos</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: Theme.colors.primary }]}>{totalPRs}</Text>
+              <Text style={[styles.statValue, { color: Theme.colors.text }]}>{totalPRs}</Text>
               <Text style={styles.statLabel}>Recordes (PRs)</Text>
             </View>
             <View style={styles.statBox}>
@@ -155,14 +155,14 @@ export default function WorkoutScreen() {
 
           {/* Templates de Treino de Força */}
           <View style={styles.sectionHeader}>
-            <Sparkles size={16} color={Theme.colors.primary} />
+            <Sparkles size={16} color={Theme.colors.accentTitanium} />
             <Text style={styles.sectionTitle}>Templates Rápidos de Treino</Text>
           </View>
 
           {/* Template 1: Push (Peito, Ombros, Tríceps) */}
           <TouchableOpacity 
             style={styles.templateCard}
-            onPress={() => startTemplate('Push (Empurrar / Peito & Ombros)', ['supino_reto_barra', 'desenvolvimento_militar', 'triceps_corda_polia'])}
+            onPress={() => startTemplate('Push (Empurrar / Peito & Ombros)', ['barbell_bench_press', 'overhead_press_barbell_standing', 'cable_triceps_pushdown_rope'])}
             activeOpacity={0.7}
           >
             <View style={styles.templateHeader}>
@@ -177,7 +177,7 @@ export default function WorkoutScreen() {
           {/* Template 2: Pull (Costas, Bíceps & Trapézio) */}
           <TouchableOpacity 
             style={styles.templateCard}
-            onPress={() => startTemplate('Pull (Puxar / Costas & Bíceps)', ['levantamento_terra', 'barra_fixa', 'rosca_direta_barra_w'])}
+            onPress={() => startTemplate('Pull (Puxar / Costas & Bíceps)', ['deadlift_conventional', 'pull_up_pronated', 'ez_bar_curl'])}
             activeOpacity={0.7}
           >
             <View style={styles.templateHeader}>
@@ -185,14 +185,14 @@ export default function WorkoutScreen() {
               <Text style={styles.templateBadge}>3 EXERCÍCIOS</Text>
             </View>
             <Text style={styles.templateExercises}>
-              Levantamento Terra • Barra Fixa • Rosca Direta
+              Levantamento Terra • Barra Fixa • Rosca Direta W
             </Text>
           </TouchableOpacity>
 
           {/* Template 3: Legs (Pernas & Posterior) */}
           <TouchableOpacity 
             style={styles.templateCard}
-            onPress={() => startTemplate('Legs (Inferiores & Força)', ['agachamento_livre', 'leg_press_45', 'stiff_barra', 'panturrilha_em_pe'])}
+            onPress={() => startTemplate('Legs (Inferiores & Força)', ['barbell_back_squat_high_bar', 'leg_press_45_degree', 'stiff_leg_deadlift_barbell', 'standing_calf_raise_machine'])}
             activeOpacity={0.7}
           >
             <View style={styles.templateHeader}>

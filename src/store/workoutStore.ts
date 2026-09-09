@@ -20,11 +20,21 @@ export const calculateEstimated1RM = (weightKg: number, reps: number): number =>
   return Math.round(val * 10) / 10;
 };
 
+import { 
+  saveWorkoutSession, 
+  getWorkoutHistory, 
+  getPersonalRecords, 
+  savePersonalRecord 
+} from '../database/database';
+
 interface WorkoutStoreState {
   currentWorkout: WorkoutSession | null;
   workoutHistory: WorkoutSession[];
   personalRecords: Record<string, PersonalRecord>;
   restTimer: RestTimerState;
+
+  // Carregamento inicial do SQLite
+  loadFromDatabase: () => void;
 
   // Ações de Treino
   startWorkout: (name?: string) => void;
@@ -58,6 +68,21 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         totalSeconds: 0,
         exerciseName: '',
         isRunning: false,
+      },
+
+      loadFromDatabase: () => {
+        try {
+          const history = getWorkoutHistory();
+          const prs = getPersonalRecords();
+          if (history.length > 0 || Object.keys(prs).length > 0) {
+            set({
+              workoutHistory: history,
+              personalRecords: prs,
+            });
+          }
+        } catch (e) {
+          console.error('Failed to load initial data from SQLite:', e);
+        }
       },
 
       startWorkout: (name?: string) => {
@@ -130,6 +155,14 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           isCompleted: true,
         };
 
+        // Persistência instantânea no banco local SQLite
+        try {
+          saveWorkoutSession(completedSession);
+          Object.values(updatedPRs).forEach(pr => savePersonalRecord(pr));
+        } catch (err) {
+          console.error('Erro ao persistir sessão no SQLite:', err);
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
         set({
@@ -148,7 +181,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           id: `we_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           exerciseId: exercise.id,
           exerciseName: exercise.name,
-          muscleGroup: exercise.muscleGroup,
+          targetMuscle: exercise.targetMuscle,
           sets: [
             {
               id: `set_${Date.now()}_1`,

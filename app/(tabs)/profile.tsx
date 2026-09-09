@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,11 @@ import { useWorkoutStore, calculateEstimated1RM } from '../../src/store/workoutS
 import Theme from '../../src/theme/theme';
 
 export default function ProfileStatsScreen() {
-  const { workoutHistory, personalRecords } = useWorkoutStore();
+  const { workoutHistory, personalRecords, loadFromDatabase } = useWorkoutStore();
+
+  useEffect(() => {
+    loadFromDatabase();
+  }, []);
 
   // Estado para calculadora interativa de 1RM
   const [calcWeight, setCalcWeight] = useState('100');
