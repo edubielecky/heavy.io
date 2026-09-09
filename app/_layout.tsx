@@ -19,6 +19,8 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 import { initDatabase } from '../src/database/database';
+import { initNotificationService, requestNotificationPermissions } from '../src/services/notificationService';
+import * as Notifications from 'expo-notifications';
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -34,12 +36,28 @@ export default function RootLayout() {
     if (loaded) {
       try {
         initDatabase();
+        initNotificationService();
+        requestNotificationPermissions();
       } catch (e) {
-        console.error('Failed to initialize SQLite database:', e);
+        console.error('Failed to initialize SQLite or Notifications:', e);
       }
       SplashScreen.hideAsync();
     }
   }, [loaded]);
+
+  // Listener para toques em notificações de descanso recebidas em segundo plano
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'REST_TIMER_COMPLETED') {
+        // Notificação de descanso concluído interagida pelo usuário
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   if (!loaded) {
     return null;

@@ -25,6 +25,12 @@ import {
   getExerciseById,
   getLastExercisePerformance
 } from '../database/database';
+import {
+  scheduleRestTimerNotification,
+  cancelRestTimerNotification,
+  triggerRestFinishedHaptics,
+} from '../services/notificationService';
+
 
 // Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
 export const calculateEstimated1RM = (weightKg: number, reps: number): number => {
@@ -211,6 +217,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           }
         }
 
+        cancelRestTimerNotification();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         set({ 
           currentWorkout: null,
@@ -229,6 +236,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           const history = getWorkoutHistory();
           const prs = getPersonalRecords();
 
+          cancelRestTimerNotification();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
           set({
@@ -491,6 +499,9 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
       startRestTimer: (seconds: number, exerciseName: string = '', exerciseId?: string) => {
         const targetEndTime = Date.now() + seconds * 1000;
+        // Agenda notificação em background para alertar o atleta mesmo com o app minimizado
+        scheduleRestTimerNotification(seconds, exerciseName);
+
         set({
           restTimer: {
             targetEndTime,
@@ -510,7 +521,8 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         const remaining = Math.max(0, Math.ceil((restTimer.targetEndTime - Date.now()) / 1000));
 
         if (remaining <= 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+          triggerRestFinishedHaptics();
+          cancelRestTimerNotification();
           set({
             restTimer: { 
               ...restTimer, 
@@ -532,6 +544,9 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
         const remaining = Math.max(0, Math.ceil((restTimer.targetEndTime - Date.now()) / 1000));
         if (remaining <= 0) {
+          // O tempo expirou enquanto o app estava minimizado
+          triggerRestFinishedHaptics();
+          cancelRestTimerNotification();
           set({
             restTimer: { 
               ...restTimer, 
@@ -548,6 +563,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
       },
 
       stopRestTimer: () => {
+        cancelRestTimerNotification();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         set({
           restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
