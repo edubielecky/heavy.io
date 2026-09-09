@@ -25,6 +25,7 @@ import {
   signInWithPopup, 
   onAuthStateChanged 
 } from '../src/services/firebase';
+import { useUserStore } from '../src/store/userStore';
 
 const videoSource = require('../assets/video/login_video.mp4');
 
@@ -76,6 +77,8 @@ export default function LoginScreen() {
     return () => unsubscribe();
   }, [router]);
 
+  const { hasCompletedOnboarding, setUserFlow } = useUserStore();
+
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Campos Obrigatórios', 'Informe e-mail e senha para continuar.');
@@ -92,20 +95,24 @@ export default function LoginScreen() {
 
     try {
       if (isRegister) {
+        // FLUXO 1: NOVO USUÁRIO -> CADASTRO & ONBOARDING
         await createUserWithEmailAndPassword(auth, email.trim(), password);
+        setUserFlow('new_user');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        router.replace('/(tabs)');
+        router.replace('/onboarding' as any);
       } else {
+        // FLUXO 2: QUEM JÁ TEM CADASTRO -> LOGIN DIRETO PARA OS TREINOS
         await signInWithEmailAndPassword(auth, email.trim(), password);
+        setUserFlow('existing_user');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        router.replace('/(tabs)');
+        router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
       }
     } catch (err: any) {
       let message = 'Falha na autenticação. Verifique os dados e tente novamente.';
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
         message = 'E-mail ou senha incorretos.';
       } else if (err.code === 'auth/email-already-in-use') {
-        message = 'Este e-mail já está cadastrado. Tente entrar.';
+        message = 'Este e-mail já está cadastrado. Tente entrar na aba "ENTRAR".';
       } else if (err.code === 'auth/invalid-email') {
         message = 'Formato de e-mail inválido.';
       }
@@ -121,21 +128,21 @@ export default function LoginScreen() {
 
     try {
       if (Platform.OS === 'web') {
-        await signInWithPopup(auth, googleProvider);
+        const result = await signInWithPopup(auth, googleProvider);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        router.replace('/(tabs)');
+        // Se ainda não completou onboarding, direciona para o fluxo de novo usuário
+        router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
       } else {
-        // No Android/iOS nativo, fallback suave para web popup ou navegação direta
+        // No Android/iOS nativo
         try {
           await signInWithPopup(auth, googleProvider);
-          router.replace('/(tabs)');
+          router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
         } catch {
-          // Se popup nativo exigir redirecionamento web, avisa o atleta
           Alert.alert(
             'Google Sign-In',
             'Conectando ao serviço Google do heavy-io...',
             [
-              { text: 'OK', onPress: () => router.replace('/(tabs)') }
+              { text: 'OK', onPress: () => router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any) }
             ]
           );
         }
@@ -150,7 +157,7 @@ export default function LoginScreen() {
 
   const handleSkipOffline = () => {
     Haptics.selectionAsync().catch(() => {});
-    router.replace('/(tabs)');
+    router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
   };
 
   return (
