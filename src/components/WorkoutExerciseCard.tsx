@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Plus, Trash2, Dumbbell } from 'lucide-react-native';
+import { Plus, Trash2, Dumbbell, TrendingUp, ShieldAlert, Activity } from 'lucide-react-native';
 import { WorkoutExercise } from '../types/workout';
 import { SetRow } from './SetRow';
 import { useWorkoutStore } from '../store/workoutStore';
 import { getLastExercisePerformance } from '../database/database';
+import { calculateProgressiveOverload } from '../services/progressiveOverloadEngine';
 import Theme from '../theme/theme';
 
 interface WorkoutExerciseCardProps {
@@ -20,6 +21,7 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
     updateSet, 
     toggleSetCompleted, 
     removeExerciseFromCurrentWorkout,
+    applyOverloadRecommendation,
     personalRecords,
     focusedExerciseId,
     setFocusedExercise
@@ -35,6 +37,22 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
   const lastPerformance = useMemo(() => {
     return getLastExercisePerformance(workoutExercise.exerciseId);
   }, [workoutExercise.exerciseId]);
+
+  // Inteligência de Sobrecarga Progressiva e Consolidação (janela de 3 a 5 sessões + RIR)
+  const overloadRec = useMemo(() => {
+    const currentWeight = workoutExercise.sets.find(s => s.weightKg > 0)?.weightKg || 0;
+    return calculateProgressiveOverload({
+      exerciseId: workoutExercise.exerciseId,
+      targetRepsMin: workoutExercise.targetRepsMin,
+      targetRepsMax: workoutExercise.targetRepsMax,
+      currentWeightKg: currentWeight,
+    });
+  }, [
+    workoutExercise.exerciseId,
+    workoutExercise.targetRepsMin,
+    workoutExercise.targetRepsMax,
+    workoutExercise.sets,
+  ]);
 
   return (
     <View style={[styles.card, isFocused && styles.cardFocused]}>
@@ -86,6 +104,65 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
           <Trash2 size={18} color={Theme.colors.danger} />
         </TouchableOpacity>
       </TouchableOpacity>
+
+      {/* Banner de Sobrecarga Progressiva & Consolidação Técnica */}
+      {overloadRec && overloadRec.type !== 'insufficient_data' && (
+        <View style={[
+          styles.recommendationBox,
+          overloadRec.type === 'increase' && styles.recBoxIncrease,
+          overloadRec.type === 'consolidate' && styles.recBoxConsolidate,
+        ]}>
+          <View style={styles.recHeaderRow}>
+            <View style={styles.recBadgeGroup}>
+              {overloadRec.type === 'increase' ? (
+                <TrendingUp size={14} color="#10B981" />
+              ) : overloadRec.type === 'consolidate' ? (
+                <ShieldAlert size={14} color="#F59E0B" />
+              ) : (
+                <Activity size={14} color={Theme.colors.textSecondary} />
+              )}
+              <Text style={[
+                styles.recTitle,
+                overloadRec.type === 'increase' && styles.recTitleIncrease,
+                overloadRec.type === 'consolidate' && styles.recTitleConsolidate,
+              ]}>
+                {overloadRec.title}
+              </Text>
+            </View>
+
+            {overloadRec.type === 'increase' && (
+              <TouchableOpacity
+                style={styles.applyRecBtn}
+                activeOpacity={0.8}
+                onPress={() => applyOverloadRecommendation(workoutExercise.id, overloadRec.suggestedWeightKg)}
+              >
+                <Text style={styles.applyRecBtnText}>
+                  APLICAR {overloadRec.suggestedWeightKg} KG
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={styles.recRationaleText}>
+            {overloadRec.rationale}
+          </Text>
+
+          {/* Rodapé técnico da janela analisada */}
+          <View style={styles.recMetaRow}>
+            <Text style={styles.recMetaText}>
+              Janela: {overloadRec.sessionsAnalyzed} {overloadRec.sessionsAnalyzed === 1 ? 'sessão' : 'sessões'}
+            </Text>
+            <Text style={styles.recMetaDot}>•</Text>
+            <Text style={styles.recMetaText}>
+              RIR médio: {overloadRec.recentAvgRir !== undefined ? overloadRec.recentAvgRir.toFixed(1) : '-'}
+            </Text>
+            <Text style={styles.recMetaDot}>•</Text>
+            <Text style={styles.recMetaText}>
+              Séries válidas: {overloadRec.recentValidSetsCount}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Cabeçalho da Tabela */}
       <View style={styles.tableHeader}>
@@ -255,5 +332,84 @@ const styles = StyleSheet.create({
     color: Theme.colors.primary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  // Estilos do Banner de Sobrecarga e Consolidação (AGENTS.md)
+  recommendationBox: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderRadius: Theme.borderRadius.sm,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  recBoxIncrease: {
+    borderColor: '#10B981',
+    borderLeftWidth: 3,
+  },
+  recBoxConsolidate: {
+    borderColor: '#F59E0B',
+    borderLeftWidth: 3,
+  },
+  recHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  recBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  recTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  recTitleIncrease: {
+    color: '#10B981',
+  },
+  recTitleConsolidate: {
+    color: '#F59E0B',
+  },
+  applyRecBtn: {
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  applyRecBtnText: {
+    color: '#09090B',
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
+  },
+  recRationaleText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 5,
+  },
+  recMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Theme.colors.border,
+  },
+  recMetaText: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  recMetaDot: {
+    color: Theme.colors.borderLight,
+    fontSize: 10,
   },
 });

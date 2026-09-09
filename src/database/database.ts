@@ -16,6 +16,7 @@ import {
   WorkoutSet,
   SetType,
   LastExercisePerformance,
+  ExerciseSessionHistoryItem,
   SyncQueueItem,
   SyncStatus
 } from '../types/workout';
@@ -1114,6 +1115,95 @@ export const getLastExercisePerformance = (
     bestWeightKg: bestWeight,
     bestEstimated1RM: best1RM,
   };
+};
+
+/**
+ * getExerciseSessionHistory(exerciseId, limit = 5):
+ * Resgata as últimas N sessões finalizadas em que o exercício foi executado,
+ * com sets concluídos, tonelagem, volume, carga máxima, RIR médio e reps válidas.
+ */
+export const getExerciseSessionHistory = (
+  exerciseId: string,
+  limit: number = 5
+): ExerciseSessionHistoryItem[] => {
+  const db = getDatabase();
+
+  const sessions = db.getAllSync<{
+    session_id: string;
+    start_time: string;
+    session_exercise_id: string;
+  }>(
+    `SELECT ws.id as session_id, ws.start_time, wse.id as session_exercise_id
+     FROM workout_sessions ws
+     JOIN workout_session_exercises wse ON ws.id = wse.session_id
+     WHERE wse.exercise_id = ? AND ws.is_completed = 1
+     ORDER BY ws.start_time DESC
+     LIMIT ?;`,
+    [exerciseId, limit]
+  );
+
+  if (!sessions || sessions.length === 0) return [];
+
+  return sessions.map(sess => {
+    const setRows = db.getAllSync<any>(
+      `SELECT set_number, type, weight_kg, reps, rpe, rir, completed
+       FROM workout_sets
+       WHERE session_exercise_id = ? AND completed = 1
+       ORDER BY set_number ASC;`,
+      [sess.session_exercise_id]
+    );
+
+    let totalVolume = 0;
+    let maxWeight = 0;
+    let rirSum = 0;
+    let rirCount = 0;
+    let rpeSum = 0;
+    let rpeCount = 0;
+    let validWorkingSets = 0;
+
+    const sets = setRows.map(st => {
+      const weight = Number(st.weight_kg) || 0;
+      const reps = Number(st.reps) || 0;
+      const rir = st.rir !== null && st.rir !== undefined ? Number(st.rir) : undefined;
+      const rpe = st.rpe !== null && st.rpe !== undefined ? Number(st.rpe) : undefined;
+      const isWorking = st.type !== 'warmup';
+
+      if (isWorking) {
+        validWorkingSets += 1;
+        totalVolume += weight * reps;
+        if (weight > maxWeight) maxWeight = weight;
+        if (rir !== undefined && !isNaN(rir)) {
+          rirSum += rir;
+          rirCount += 1;
+        }
+        if (rpe !== undefined && !isNaN(rpe)) {
+          rpeSum += rpe;
+          rpeCount += 1;
+        }
+      }
+
+      return {
+        setNumber: st.set_number,
+        type: st.type as SetType,
+        weightKg: weight,
+        reps: reps,
+        rpe,
+        rir,
+        completed: Boolean(st.completed),
+      };
+    });
+
+    return {
+      sessionId: sess.session_id,
+      sessionDate: sess.start_time,
+      totalVolumeKg: Math.round(totalVolume * 10) / 10,
+      maxWeightKg: maxWeight,
+      avgRir: rirCount > 0 ? Math.round((rirSum / rirCount) * 10) / 10 : undefined,
+      avgRpe: rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : undefined,
+      validWorkingSets,
+      sets,
+    };
+  });
 };
 
 /**

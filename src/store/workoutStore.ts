@@ -77,6 +77,7 @@ interface WorkoutStoreState {
   removeSet: (workoutExerciseId: string, setId: string) => void;
   updateSet: (workoutExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   toggleSetCompleted: (workoutExerciseId: string, setId: string) => void;
+  applyOverloadRecommendation: (workoutExerciseId: string, suggestedWeightKg: number) => void;
 
   // Cronômetro de Descanso
   startRestTimer: (seconds: number, exerciseName?: string, exerciseId?: string) => void;
@@ -219,6 +220,8 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
             exerciseId: re.exerciseId,
             exerciseName: re.exerciseName,
             targetMuscle: re.targetMuscle,
+            targetRepsMin: re.targetRepsMin,
+            targetRepsMax: re.targetRepsMax,
             sets,
           };
         });
@@ -566,6 +569,41 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         } else {
           Haptics.selectionAsync().catch(() => {});
         }
+      },
+
+      applyOverloadRecommendation: (workoutExerciseId: string, suggestedWeightKg: number) => {
+        const { currentWorkout } = get();
+        if (!currentWorkout) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+        const updatedExercises = currentWorkout.exercises.map(ex => {
+          if (ex.id !== workoutExerciseId) return ex;
+
+          // Atualiza as séries não concluídas com a nova carga recomendada
+          const updatedSets = ex.sets.map(s => {
+            if (s.completed) return s;
+            return {
+              ...s,
+              weightKg: suggestedWeightKg,
+            };
+          });
+
+          return {
+            ...ex,
+            sets: updatedSets,
+          };
+        });
+
+        const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+        try {
+          saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
+        } catch (err) {
+          console.error('Erro ao salvar rascunho com recomendação de carga:', err);
+        }
+
+        set({ currentWorkout: updatedSession });
       },
 
       startRestTimer: (seconds: number, exerciseName: string = '', exerciseId?: string) => {

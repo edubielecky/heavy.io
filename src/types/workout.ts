@@ -80,6 +80,8 @@ export interface WorkoutExercise {
   exerciseId: string;
   exerciseName: string;
   targetMuscle: MuscleGroup;
+  targetRepsMin?: number;
+  targetRepsMax?: number;
   sets: WorkoutSet[];
   notes?: string;
 }
@@ -179,5 +181,44 @@ export interface SyncQueueItem {
   errorMessage?: string;
   status: SyncStatus;
   createdAt: string;
+}
+
+export interface ExerciseSessionHistoryItem {
+  sessionId: string;
+  sessionDate: string;
+  totalVolumeKg: number;
+  maxWeightKg: number;
+  avgRir?: number;
+  avgRpe?: number;
+  validWorkingSets: number;
+  sets: {
+    setNumber: number;
+    type: SetType;
+    weightKg: number;
+    reps: number;
+    rpe?: number;
+    rir?: number;
+    completed: boolean;
+  }[];
+}
+
+export type OverloadDecisionType = 'increase' | 'consolidate' | 'maintain' | 'insufficient_data';
+
+export interface ProgressiveOverloadRecommendation {
+  type: OverloadDecisionType;
+  exerciseId: string;
+  exerciseName: string;
+  currentWeightKg: number;
+  incrementKg: number;
+  suggestedWeightKg: number;
+  targetRepsCeiling: number;
+  title: string;
+  badgeLabel: string;
+  rationale: string;
+  actionLabel?: string;
+  sessionsAnalyzed: number;
+  recentAvgRir?: number;
+  recentValidSetsCount: number;
+  recentTotalVolumeKg: number;
 }
 
