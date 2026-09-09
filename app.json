@@ -17,8 +17,8 @@
           "fetch",
           "remote-notification"
         ],
-        "NSHealthShareUsageDescription": "heavy.io lê seus dados de composição corporal e peso para calcular sua periodização e gasto energético.",
-        "NSHealthUpdateUsageDescription": "heavy.io grava seus treinos de musculação e calorias gastas no Apple Health."
+        "NSHealthShareUsageDescription": "heavy.io lê seus batimentos cardíacos (BPM), peso corporal e altura para calcular gasto energético e intensidade das séries de força.",
+        "NSHealthUpdateUsageDescription": "heavy.io grava suas sessões de musculação, frequência cardíaca e calorias ativas no Apple Health."
       }
     },
     "android": {
@@ -40,6 +40,8 @@
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.READ_HEIGHT",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.WRITE_HEART_RATE",
         "android.permission.health.READ_TOTAL_CALORIES_BURNED",
         "android.permission.health.READ_EXERCISE",
         "android.permission.health.WRITE_EXERCISE",

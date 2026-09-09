@@ -35,7 +35,7 @@ import {
 } from '../services/notificationService';
 import { processSyncQueue } from '../services/syncQueueService';
 import { useUserStore } from './userStore';
-import { exportWorkoutSessionToHealthConnect } from '../services/healthConnectService';
+import { syncWorkoutSessionToHealth } from '../services/healthSyncService';
 
 
 // Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
@@ -291,9 +291,9 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           // Dispara sincronização em nuvem se houver conexão ativa
           processSyncQueue().catch(() => {});
 
-          // Exporta sessão para o Google Health Connect se disponível
+          // Exporta sessão para Apple Health (iOS) ou Google Health Connect (Android)
           if (completed) {
-            exportWorkoutSessionToHealthConnect(completed).catch(() => {});
+            syncWorkoutSessionToHealth(completed).catch(() => {});
           }
 
           set({

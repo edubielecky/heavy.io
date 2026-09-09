@@ -109,8 +109,27 @@ export const initDatabase = (): void => {
     if (!colNames.includes('order_index')) {
       db.execSync('ALTER TABLE routines ADD COLUMN order_index INTEGER DEFAULT 0;');
     }
+
+    // Migração de colunas biométricas (Apple Health / Google Health Connect)
+    const sessionCols = db.getAllSync<{ name: string }>('PRAGMA table_info(workout_sessions);');
+    const sessColNames = sessionCols.map(c => c.name);
+    if (!sessColNames.includes('avg_heart_rate')) {
+      db.execSync('ALTER TABLE workout_sessions ADD COLUMN avg_heart_rate INTEGER;');
+    }
+    if (!sessColNames.includes('peak_heart_rate')) {
+      db.execSync('ALTER TABLE workout_sessions ADD COLUMN peak_heart_rate INTEGER;');
+    }
+    if (!sessColNames.includes('active_calories')) {
+      db.execSync('ALTER TABLE workout_sessions ADD COLUMN active_calories INTEGER;');
+    }
+
+    const setCols = db.getAllSync<{ name: string }>('PRAGMA table_info(workout_sets);');
+    const setColNames = setCols.map(c => c.name);
+    if (!setColNames.includes('peak_bpm')) {
+      db.execSync('ALTER TABLE workout_sets ADD COLUMN peak_bpm INTEGER;');
+    }
   } catch (e) {
-    console.error('Erro ao verificar/migrar colunas de rotinas:', e);
+    console.error('Erro ao verificar/migrar colunas de rotinas e biometria:', e);
   }
 
   // 4. Cria rotinas padrão caso não existam
@@ -823,8 +842,9 @@ export const saveWorkoutSession = (session: WorkoutSession): void => {
     db.runSync(
       `INSERT OR REPLACE INTO workout_sessions (
         id, routine_id, name, start_time, end_time, 
-        duration_seconds, total_volume_kg, total_sets, is_completed, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        duration_seconds, total_volume_kg, total_sets, is_completed, notes,
+        avg_heart_rate, peak_heart_rate, active_calories
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         session.id,
         session.routineId || null,
@@ -836,6 +856,9 @@ export const saveWorkoutSession = (session: WorkoutSession): void => {
         session.totalSets,
         session.isCompleted ? 1 : 0,
         session.notes || null,
+        session.avgHeartRate ?? null,
+        session.peakHeartRate ?? null,
+        session.activeCalories ?? null,
       ]
     );
 
@@ -851,8 +874,8 @@ export const saveWorkoutSession = (session: WorkoutSession): void => {
       we.sets.forEach(s => {
         db.runSync(
           `INSERT OR REPLACE INTO workout_sets (
-            id, session_exercise_id, set_number, type, weight_kg, reps, rpe, rir, completed, completed_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            id, session_exercise_id, set_number, type, weight_kg, reps, rpe, rir, peak_bpm, completed, completed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             s.id,
             we.id,
@@ -862,6 +885,7 @@ export const saveWorkoutSession = (session: WorkoutSession): void => {
             s.reps,
             s.rpe || null,
             s.rir || null,
+            s.peakBpm || null,
             s.completed ? 1 : 0,
             s.completedAt || null,
           ]
@@ -901,6 +925,7 @@ export const getWorkoutHistory = (): WorkoutSession[] => {
         reps: st.reps,
         rpe: st.rpe || undefined,
         rir: st.rir || undefined,
+        peakBpm: st.peak_bpm || undefined,
         completed: st.completed === 1,
         completedAt: st.completed_at || undefined,
       }));
@@ -926,6 +951,9 @@ export const getWorkoutHistory = (): WorkoutSession[] => {
       totalSets: s.total_sets,
       isCompleted: s.is_completed === 1,
       notes: s.notes || undefined,
+      avgHeartRate: s.avg_heart_rate ?? undefined,
+      peakHeartRate: s.peak_heart_rate ?? undefined,
+      activeCalories: s.active_calories ?? undefined,
       exercises,
     };
   });
@@ -1024,6 +1052,7 @@ export const getWorkoutSession = (id: string): WorkoutSession | null => {
       reps: st.reps,
       rpe: st.rpe ?? undefined,
       rir: st.rir ?? undefined,
+      peakBpm: st.peak_bpm ?? undefined,
       completed: st.completed === 1,
       completedAt: st.completed_at ?? undefined,
     }));
@@ -1049,6 +1078,9 @@ export const getWorkoutSession = (id: string): WorkoutSession | null => {
     totalSets: sessionRow.total_sets,
     isCompleted: sessionRow.is_completed === 1,
     notes: sessionRow.notes ?? undefined,
+    avgHeartRate: sessionRow.avg_heart_rate ?? undefined,
+    peakHeartRate: sessionRow.peak_heart_rate ?? undefined,
+    activeCalories: sessionRow.active_calories ?? undefined,
     exercises,
   };
 };
@@ -1218,6 +1250,7 @@ export const logSet = (params: {
   reps: number;
   rpe?: number;
   rir?: number;
+  peakBpm?: number;
   completed?: boolean;
 }): WorkoutSet => {
   const db = getDatabase();
@@ -1239,8 +1272,8 @@ export const logSet = (params: {
 
   db.runSync(
     `INSERT OR REPLACE INTO workout_sets (
-      id, session_exercise_id, set_number, type, weight_kg, reps, rpe, rir, completed, completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      id, session_exercise_id, set_number, type, weight_kg, reps, rpe, rir, peak_bpm, completed, completed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       id,
       params.sessionExerciseId,
@@ -1250,6 +1283,7 @@ export const logSet = (params: {
       params.reps,
       params.rpe ?? null,
       params.rir ?? null,
+      params.peakBpm ?? null,
       completed ? 1 : 0,
       completedAt,
     ]
@@ -1294,6 +1328,7 @@ export const logSet = (params: {
     reps: params.reps,
     rpe: params.rpe,
     rir: params.rir,
+    peakBpm: params.peakBpm,
     completed,
     completedAt: completedAt || undefined,
   };
@@ -1327,11 +1362,28 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
   const totalVolumeKg = Math.round(stats?.total_volume || 0);
   const totalSets = stats?.completed_sets || 0;
 
+  // Calcula estimativa de gasto calórico ativo (MET 5.5) e frequência cardíaca média / pico
+  const durationMinutes = durationSeconds / 60;
+  const activeCalories = Math.max(45, Math.round((durationMinutes * 5.5 * 80) / 60));
+
+  const setBpmRows = db.getAllSync<{ peak_bpm: number | null }>(
+    `SELECT ws.peak_bpm 
+     FROM workout_sets ws
+     JOIN workout_session_exercises wse ON ws.session_exercise_id = wse.id
+     WHERE wse.session_id = ? AND ws.completed = 1 AND ws.peak_bpm IS NOT NULL;`,
+    [sessionId]
+  );
+
+  const bpms = setBpmRows.map(r => r.peak_bpm).filter((b): b is number => b !== null && b > 0);
+  const peakHeartRate = bpms.length > 0 ? Math.max(...bpms) : (session.peakHeartRate || 158);
+  const avgHeartRate = bpms.length > 0 ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : (session.avgHeartRate || 126);
+
   db.runSync(
     `UPDATE workout_sessions 
-     SET end_time = ?, duration_seconds = ?, total_volume_kg = ?, total_sets = ?, is_completed = 1
+     SET end_time = ?, duration_seconds = ?, total_volume_kg = ?, total_sets = ?, is_completed = 1,
+         active_calories = ?, avg_heart_rate = ?, peak_heart_rate = ?
      WHERE id = ?;`,
-    [endTime, durationSeconds, totalVolumeKg, totalSets, sessionId]
+    [endTime, durationSeconds, totalVolumeKg, totalSets, activeCalories, avgHeartRate, peakHeartRate, sessionId]
   );
 
   const completedSession = getWorkoutSession(sessionId);

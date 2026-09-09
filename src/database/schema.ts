@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS workout_sessions (
   total_sets INTEGER NOT NULL DEFAULT 0,
   is_completed INTEGER NOT NULL DEFAULT 0,
   notes TEXT,
+  avg_heart_rate INTEGER,
+  peak_heart_rate INTEGER,
+  active_calories INTEGER,
   FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE SET NULL
 );
 
@@ -104,6 +107,7 @@ CREATE TABLE IF NOT EXISTS workout_sets (
   reps INTEGER NOT NULL DEFAULT 0,
   rpe REAL,
   rir INTEGER,
+  peak_bpm INTEGER,
   completed INTEGER NOT NULL DEFAULT 0,
   completed_at TEXT,
   FOREIGN KEY (session_exercise_id) REFERENCES workout_session_exercises(id) ON DELETE CASCADE

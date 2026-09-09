@@ -71,6 +71,7 @@ export interface WorkoutSet {
   reps: number;
   rpe?: number; // Rate of Perceived Exertion (6 a 10)
   rir?: number; // Reps In Reserve (0 a 4)
+  peakBpm?: number; // Pico de frequência cardíaca durante a série
   completed: boolean;
   completedAt?: string;
 }
@@ -98,6 +99,9 @@ export interface WorkoutSession {
   totalSets: number;
   isCompleted: boolean;
   notes?: string;
+  avgHeartRate?: number; // Frequência cardíaca média (BPM)
+  peakHeartRate?: number; // Pico máximo de BPM na sessão
+  activeCalories?: number; // Calorias ativas gastas (kcal)
 }
 
 export interface RoutineExerciseItem {

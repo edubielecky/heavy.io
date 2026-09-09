@@ -24,6 +24,7 @@ export interface HealthConnectStatus {
 const REQUIRED_PERMISSIONS = [
   { accessType: 'read' as const, recordType: 'Weight' as const },
   { accessType: 'read' as const, recordType: 'Height' as const },
+  { accessType: 'read' as const, recordType: 'HeartRate' as const },
   { accessType: 'write' as const, recordType: 'ExerciseSession' as const },
   { accessType: 'write' as const, recordType: 'TotalCaloriesBurned' as const },
 ];
@@ -254,6 +255,65 @@ export async function exportWorkoutSessionToHealthConnect(
   } catch (err) {
     console.warn('Erro ao exportar treino para o Health Connect:', err);
     return false;
+  }
+}
+
+/**
+ * Consulta amostras de frequência cardíaca (HeartRateRecord) registradas durante a sessão de treino
+ * para calcular o BPM Médio e o Pico Máximo de BPM.
+ */
+export async function fetchHeartRateMetricsFromHealthConnect(
+  startTime: string,
+  endTime: string
+): Promise<{ avgBpm?: number; peakBpm?: number; samplesCount: number }> {
+  if (Platform.OS !== 'android') {
+    return { samplesCount: 0 };
+  }
+
+  try {
+    await initialize();
+
+    const records: any = await readRecords('HeartRate', {
+      timeRangeFilter: {
+        operator: 'between',
+        startTime,
+        endTime,
+      },
+    });
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return { samplesCount: 0 };
+    }
+
+    let allSamples: number[] = [];
+
+    // Cada HeartRateRecord possui um array `samples` com { time, beatsPerMinute }
+    records.forEach((record: any) => {
+      if (Array.isArray(record.samples)) {
+        record.samples.forEach((sample: any) => {
+          const bpm = Number(sample.beatsPerMinute);
+          if (bpm > 30 && bpm < 250) {
+            allSamples.push(bpm);
+          }
+        });
+      }
+    });
+
+    if (allSamples.length === 0) {
+      return { samplesCount: 0 };
+    }
+
+    const peakBpm = Math.max(...allSamples);
+    const avgBpm = Math.round(allSamples.reduce((a, b) => a + b, 0) / allSamples.length);
+
+    return {
+      avgBpm,
+      peakBpm,
+      samplesCount: allSamples.length,
+    };
+  } catch (err) {
+    console.warn('Erro ao consultar frequência cardíaca no Health Connect:', err);
+    return { samplesCount: 0 };
   }
 }
 

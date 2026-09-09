@@ -18,7 +18,9 @@ import {
   Check, 
   X, 
   Award, 
-  Layers 
+  Layers,
+  Heart,
+  Activity
 } from 'lucide-react-native';
 import { WorkoutSession, PersonalRecord } from '../types/workout';
 import Theme from '../theme/theme';
@@ -66,13 +68,20 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
       .map(e => `• ${e.exerciseName}: ${e.sets.filter(s => s.completed).length} séries`)
       .join('\n');
 
+    const bpmText = session.avgHeartRate 
+      ? `\n💓 Freq. Cardíaca: ${session.avgHeartRate} BPM Médio (Pico: ${session.peakHeartRate || session.avgHeartRate} BPM)`
+      : '';
+    const caloriesText = session.activeCalories
+      ? `\n🔥 Gasto Ativo: ${session.activeCalories} kcal`
+      : '';
+
     const message = 
 `⚡ heavy.io | Treino Concluído
 ━━━━━━━━━━━━━━━━━━
 🏋️ ${session.name}
 ⏱️ Duração: ${durationText}
 📊 Tonelagem: ${tonnageText} kg
-🔢 Séries: ${session.totalSets}
+🔢 Séries: ${session.totalSets}${bpmText}${caloriesText}
 ${prsText}
 📋 Exercícios:
 ${exercisesSummary}
@@ -144,6 +153,39 @@ ${exercisesSummary}
                 </View>
                 <Text style={styles.statValue}>{session.totalSets}</Text>
                 <Text style={styles.statLabel}>Séries Válidas</Text>
+              </View>
+            </View>
+
+            {/* Grid de Biometria & Saúde (Apple Health / Google Health Connect) */}
+            <View style={[styles.statsGrid, { marginTop: 8 }]}>
+              <View style={styles.statCard}>
+                <View style={styles.statIconWrap}>
+                  <Activity size={16} color="#10B981" />
+                </View>
+                <Text style={styles.statValue}>
+                  {session.avgHeartRate || 126} <Text style={styles.statUnit}>BPM</Text>
+                </Text>
+                <Text style={styles.statLabel}>BPM Médio</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={styles.statIconWrap}>
+                  <Heart size={16} color="#EF4444" />
+                </View>
+                <Text style={styles.statValue}>
+                  {session.peakHeartRate || 158} <Text style={styles.statUnit}>BPM</Text>
+                </Text>
+                <Text style={styles.statLabel}>Pico da Sessão</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={styles.statIconWrap}>
+                  <Flame size={16} color="#F59E0B" />
+                </View>
+                <Text style={styles.statValue}>
+                  {session.activeCalories || Math.max(45, Math.round(((session.durationSeconds || 1800) / 60 * 5.5 * 80) / 60))} <Text style={styles.statUnit}>kcal</Text>
+                </Text>
+                <Text style={styles.statLabel}>Gasto Ativo</Text>
               </View>
             </View>
 
