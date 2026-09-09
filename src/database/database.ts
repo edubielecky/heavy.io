@@ -292,6 +292,68 @@ export const getRoutines = (): Routine[] => {
   });
 };
 
+export const saveRoutine = (
+  routine: Omit<Routine, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }
+): Routine => {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const createdAt = routine.createdAt || now;
+  const updatedAt = now;
+
+  db.withTransactionSync(() => {
+    db.runSync(
+      `INSERT OR REPLACE INTO routines (id, name, description, is_system, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?);`,
+      [
+        routine.id,
+        routine.name,
+        routine.description || null,
+        routine.isSystem ? 1 : 0,
+        createdAt,
+        updatedAt,
+      ]
+    );
+
+    // Remove exercícios existentes da rotina para sincronizar a lista
+    db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [routine.id]);
+
+    routine.exercises.forEach((ex, idx) => {
+      const exId = ex.id || `${routine.id}_ex_${idx}_${Date.now()}`;
+      db.runSync(
+        `INSERT INTO routine_exercises (
+          id, routine_id, exercise_id, order_index, target_sets, target_reps_min, target_reps_max, rest_seconds, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          exId,
+          routine.id,
+          ex.exerciseId,
+          idx,
+          ex.targetSets || 3,
+          ex.targetRepsMin || 8,
+          ex.targetRepsMax || 12,
+          ex.restSeconds || 90,
+          ex.notes || null,
+        ]
+      );
+    });
+  });
+
+  return {
+    ...routine,
+    isSystem: routine.isSystem ?? false,
+    createdAt,
+    updatedAt,
+  };
+};
+
+export const deleteRoutine = (routineId: string): void => {
+  const db = getDatabase();
+  db.withTransactionSync(() => {
+    db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [routineId]);
+    db.runSync('DELETE FROM routines WHERE id = ?;', [routineId]);
+  });
+};
+
 /**
  * CONSULTAS E GRAVAÇÃO DE SESSÕES DE TREINO & SÉRIES
  */

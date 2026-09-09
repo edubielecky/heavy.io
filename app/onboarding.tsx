@@ -43,14 +43,15 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     setOnboardingTrack(selectedTrack);
     
-    // Conforme o pedido: parar exatamente na bifurcação para construir cada um individualmente a seguir
-    Alert.alert(
-      selectedTrack === 'advanced' ? 'Fluxo Avançado Selecionado' : 'Fluxo Guiado Selecionado',
-      selectedTrack === 'advanced' 
-        ? 'Você escolheu "Já tenho a minha rotina". A seguir iremos construir a estrutura de montagem e importação personalizada.' 
-        : 'Você escolheu "Montar para mim". A seguir iremos construir o questionário e algoritmo de montagem guiada.',
-      [{ text: 'Entendido', style: 'default' }]
-    );
+    if (selectedTrack === 'advanced') {
+      router.push('/onboarding-advanced' as any);
+    } else {
+      Alert.alert(
+        'Fluxo Guiado Selecionado',
+        'Você escolheu "Montar para mim". A seguir iremos construir o questionário e algoritmo de montagem guiada.',
+        [{ text: 'Entendido', style: 'default' }]
+      );
+    }
   };
 
   return (
