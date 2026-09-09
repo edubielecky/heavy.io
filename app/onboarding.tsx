@@ -5,181 +5,186 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   SafeAreaView, 
-  ScrollView 
+  ScrollView,
+  Alert 
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { 
-  Dumbbell, 
-  Flame, 
-  TrendingUp, 
-  Target, 
+  Sliders, 
+  Compass, 
   ArrowRight, 
-  Check, 
-  ChevronRight 
+  CheckCircle2, 
+  Circle,
+  Dumbbell,
+  Sparkles,
+  Layers,
+  Zap,
+  Check
 } from 'lucide-react-native';
 import Theme from '../src/theme/theme';
-import { useUserStore } from '../src/store/userStore';
+import { useUserStore, OnboardingTrack } from '../src/store/userStore';
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { completeOnboarding, setProfile } = useUserStore();
+  const { onboardingTrack, setOnboardingTrack } = useUserStore();
 
-  // Estados iniciais do fluxo de novo usuário
-  const [selectedGoal, setSelectedGoal] = useState<'forca_pura' | 'hipertrofia' | 'recomposicao'>('forca_pura');
-  const [experienceLevel, setExperienceLevel] = useState<'iniciante' | 'intermediario' | 'avancado'>('intermediario');
-  const [frequencyDays, setFrequencyDays] = useState(4);
+  const [selectedTrack, setSelectedTrack] = useState<OnboardingTrack>(
+    onboardingTrack || 'advanced'
+  );
 
-  const goals = [
-    {
-      id: 'forca_pura' as const,
-      title: 'Força Máxima (Powerlifting / 1RM)',
-      desc: 'Progressão agressiva nos levantamentos básicos (Supino, Agachamento e Terra).',
-      icon: Dumbbell,
-    },
-    {
-      id: 'hipertrofia' as const,
-      title: 'Hipertrofia & Densidade Muscular',
-      desc: 'Acúmulo de volume técnico semanal e fadiga controlada com RIR/RPE.',
-      icon: Flame,
-    },
-    {
-      id: 'recomposicao' as const,
-      title: 'Recomposição Corporal',
-      desc: 'Ganho de massa magra e aumento consistente de eficiência metabólica.',
-      icon: TrendingUp,
-    },
-  ];
+  const handleSelectTrack = (track: OnboardingTrack) => {
+    setSelectedTrack(track);
+    setOnboardingTrack(track);
+    Haptics.selectionAsync().catch(() => {});
+  };
 
-  const levels = [
-    { id: 'iniciante' as const, label: 'Iniciante', sub: 'Menos de 1 ano de treino consistente' },
-    { id: 'intermediario' as const, label: 'Intermediário', sub: '1 a 3 anos aplicando sobrecarga' },
-    { id: 'avancado' as const, label: 'Avançado', sub: 'Mais de 3 anos de periodização séria' },
-  ];
-
-  const handleFinishOnboarding = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    completeOnboarding({
-      primaryGoal: selectedGoal,
-      experienceLevel,
-      preferredDaysPerWeek: frequencyDays,
-    });
-    router.replace('/(tabs)' as any);
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    setOnboardingTrack(selectedTrack);
+    
+    // Conforme o pedido: parar exatamente na bifurcação para construir cada um individualmente a seguir
+    Alert.alert(
+      selectedTrack === 'advanced' ? 'Fluxo Avançado Selecionado' : 'Fluxo Guiado Selecionado',
+      selectedTrack === 'advanced' 
+        ? 'Você escolheu "Já tenho a minha rotina". A seguir iremos construir a estrutura de montagem e importação personalizada.' 
+        : 'Você escolheu "Montar para mim". A seguir iremos construir o questionário e algoritmo de montagem guiada.',
+      [{ text: 'Entendido', style: 'default' }]
+    );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header do Fluxo de Novo Atleta */}
+        {/* Header Superior */}
         <View style={styles.header}>
-          <View style={styles.stepBadge}>
-            <Target size={12} color={Theme.colors.primary} />
-            <Text style={styles.stepBadgeText}>CONFIGURAÇÃO INICIAL • NOVO ATLETA</Text>
+          <View style={styles.badgeStep}>
+            <Layers size={13} color={Theme.colors.primary} />
+            <Text style={styles.badgeStepText}>PRIMEIRO ACESSO • DEFINIÇÃO DE FLUXO</Text>
           </View>
-          <Text style={styles.title}>Defina sua Diretriz de Força</Text>
+          <Text style={styles.title}>Como deseja estruturar seu treino?</Text>
           <Text style={styles.subtitle}>
-            O heavy.io calibra suas sugestões de carga e metas de volume de acordo com seus objetivos.
+            Personalize sua experiência de acordo com seu grau de controle e autonomia no treino de força.
           </Text>
         </View>
 
-        {/* 1. Seleção de Objetivo */}
-        <Text style={styles.sectionLabel}>OBJETIVO PRINCIPAL</Text>
-        <View style={styles.goalsContainer}>
-          {goals.map(g => {
-            const isSelected = selectedGoal === g.id;
-            const Icon = g.icon;
-            return (
-              <TouchableOpacity
-                key={g.id}
-                style={[styles.goalCard, isSelected && styles.goalCardSelected]}
-                onPress={() => {
-                  setSelectedGoal(g.id);
-                  Haptics.selectionAsync().catch(() => {});
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.goalIconBox, isSelected && styles.goalIconBoxSelected]}>
-                  <Icon size={18} color={isSelected ? Theme.colors.textInverse : Theme.colors.primary} />
+        {/* Opções de Bifurcação do Fluxo */}
+        <View style={styles.cardsContainer}>
+          {/* 1. OPÇÃO AVANÇADO (JÁ TENHO A MINHA ROTINA) */}
+          <TouchableOpacity
+            style={[
+              styles.trackCard,
+              selectedTrack === 'advanced' && styles.trackCardActive
+            ]}
+            onPress={() => handleSelectTrack('advanced')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBox, selectedTrack === 'advanced' && styles.iconBoxActive]}>
+                <Sliders size={20} color={selectedTrack === 'advanced' ? Theme.colors.textInverse : Theme.colors.primary} />
+              </View>
+              <View style={styles.cardTitleArea}>
+                <View style={styles.badgeTag}>
+                  <Text style={styles.badgeTagText}>CONTROLE TOTAL</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.goalTitle, isSelected && styles.goalTitleSelected]}>
-                    {g.title}
-                  </Text>
-                  <Text style={styles.goalDesc}>{g.desc}</Text>
-                </View>
-                {isSelected && (
-                  <View style={styles.checkCircle}>
-                    <Check size={14} color={Theme.colors.textInverse} strokeWidth={3} />
-                  </View>
+                <Text style={styles.trackTitle}>Avançado</Text>
+                <Text style={styles.trackSub}>Já tenho a minha rotina</Text>
+              </View>
+              <View style={styles.checkArea}>
+                {selectedTrack === 'advanced' ? (
+                  <CheckCircle2 size={22} color={Theme.colors.primary} />
+                ) : (
+                  <Circle size={22} color={Theme.colors.borderLight} />
                 )}
-              </TouchableOpacity>
-            );
-          })}
+              </View>
+            </View>
+
+            <Text style={styles.cardDescription}>
+              Para atletas experientes que já possuem divisões consolidadas (Push/Pull/Legs, Upper/Lower, periodizações personalizadas).
+            </Text>
+
+            <View style={styles.featuresList}>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Montagem manual de rotinas e fichas</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Definição direta de cargas alvo e repetições</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Acesso ágil ao diário de sobrecarga progressiva</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* 2. OPÇÃO GUIADO (MONTAR PARA MIM) */}
+          <TouchableOpacity
+            style={[
+              styles.trackCard,
+              selectedTrack === 'guided' && styles.trackCardActive
+            ]}
+            onPress={() => handleSelectTrack('guided')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBox, selectedTrack === 'guided' && styles.iconBoxActive]}>
+                <Compass size={20} color={selectedTrack === 'guided' ? Theme.colors.textInverse : Theme.colors.primary} />
+              </View>
+              <View style={styles.cardTitleArea}>
+                <View style={styles.badgeTag}>
+                  <Text style={styles.badgeTagText}>ASSISTIDO</Text>
+                </View>
+                <Text style={styles.trackTitle}>Guiado</Text>
+                <Text style={styles.trackSub}>Montar para mim</Text>
+              </View>
+              <View style={styles.checkArea}>
+                {selectedTrack === 'guided' ? (
+                  <CheckCircle2 size={22} color={Theme.colors.primary} />
+                ) : (
+                  <Circle size={22} color={Theme.colors.borderLight} />
+                )}
+              </View>
+            </View>
+
+            <Text style={styles.cardDescription}>
+              O heavy.io formula uma rotina técnica baseada nos seus objetivos, dias disponíveis e foco biomecânico ideal.
+            </Text>
+
+            <View style={styles.featuresList}>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Divisão inteligente para seus dias na semana</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Seleção balanceada de compostos e isoladores</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Check size={14} color={Theme.colors.primary} />
+                <Text style={styles.featureText}>Recomendações técnicas de descanso e volume</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
-        {/* 2. Nível de Experiência */}
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>EXPERIÊNCIA COM PESOS LIVRES</Text>
-        <View style={styles.levelsRow}>
-          {levels.map(l => {
-            const isSelected = experienceLevel === l.id;
-            return (
-              <TouchableOpacity
-                key={l.id}
-                style={[styles.levelCard, isSelected && styles.levelCardSelected]}
-                onPress={() => {
-                  setExperienceLevel(l.id);
-                  Haptics.selectionAsync().catch(() => {});
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.levelLabel, isSelected && styles.levelLabelSelected]}>
-                  {l.label}
-                </Text>
-                <Text style={styles.levelSub}>{l.sub}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* 3. Frequência Semanal */}
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>FREQUÊNCIA SEMANAL ALVO</Text>
-        <View style={styles.daysRow}>
-          {[3, 4, 5, 6].map(days => {
-            const isSelected = frequencyDays === days;
-            return (
-              <TouchableOpacity
-                key={days}
-                style={[styles.dayButton, isSelected && styles.dayButtonSelected]}
-                onPress={() => {
-                  setFrequencyDays(days);
-                  Haptics.selectionAsync().catch(() => {});
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
-                  {days}x
-                </Text>
-                <Text style={[styles.daySub, isSelected && styles.daySubSelected]}>
-                  dias/sem
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Botão de Finalização do Onboarding */}
+        {/* Botão de Confirmação da Escolha */}
         <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleFinishOnboarding}
+          style={styles.continueButton}
+          onPress={handleContinue}
           activeOpacity={0.85}
         >
-          <Text style={styles.submitButtonText}>Entrar no Sistema & Começar Treino</Text>
+          <Text style={styles.continueButtonText}>
+            {selectedTrack === 'advanced' 
+              ? 'Continuar com Fluxo Avançado' 
+              : 'Continuar com Fluxo Guiado'}
+          </Text>
           <ArrowRight size={18} color={Theme.colors.textInverse} />
         </TouchableOpacity>
 
-        {/* Rodapé informativo */}
         <Text style={styles.footerNote}>
-          Você poderá alterar suas diretrizes a qualquer momento na aba de estatísticas.
+          Essa escolha define apenas o ponto de partida. Você sempre terá liberdade para criar ou editar qualquer ficha posteriormente.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -192,14 +197,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#09090B',
   },
   scrollContent: {
-    padding: 22,
+    paddingHorizontal: 20,
     paddingTop: 30,
     paddingBottom: 60,
   },
   header: {
-    marginBottom: 26,
+    marginBottom: 24,
   },
-  stepBadge: {
+  badgeStep: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -212,11 +217,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 12,
   },
-  stepBadgeText: {
+  badgeStepText: {
     color: Theme.colors.primary,
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   title: {
     fontSize: 26,
@@ -230,130 +235,94 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 6,
   },
-  sectionLabel: {
-    color: Theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 12,
+  cardsContainer: {
+    gap: 16,
+    marginBottom: 28,
   },
-  goalsContainer: {
-    gap: 10,
-  },
-  goalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  trackCard: {
     backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.lg,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    gap: 14,
   },
-  goalCardSelected: {
+  trackCardActive: {
     backgroundColor: '#18181B',
     borderColor: Theme.colors.primary,
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderLeftColor: Theme.colors.primary,
   },
-  goalIconBox: {
-    width: 36,
-    height: 36,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    gap: 12,
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
     borderRadius: Theme.borderRadius.sm,
     backgroundColor: Theme.colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  goalIconBoxSelected: {
+  iconBoxActive: {
     backgroundColor: Theme.colors.primary,
   },
-  goalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Theme.colors.text,
-  },
-  goalTitleSelected: {
-    color: Theme.colors.text,
-  },
-  goalDesc: {
-    fontSize: 11,
-    color: Theme.colors.textMuted,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  checkCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  levelsRow: {
-    gap: 8,
-  },
-  levelCard: {
-    backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-  },
-  levelCardSelected: {
-    backgroundColor: '#18181B',
-    borderColor: Theme.colors.borderLight,
-    borderLeftWidth: 3,
-    borderLeftColor: Theme.colors.primary,
-  },
-  levelLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Theme.colors.text,
-  },
-  levelLabelSelected: {
-    color: Theme.colors.primary,
-  },
-  levelSub: {
-    fontSize: 11,
-    color: Theme.colors.textMuted,
-    marginTop: 2,
-  },
-  daysRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  dayButton: {
+  cardTitleArea: {
     flex: 1,
-    backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.md,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
   },
-  dayButtonSelected: {
-    backgroundColor: Theme.colors.primary,
-    borderColor: Theme.colors.primary,
+  badgeTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    marginBottom: 4,
   },
-  dayText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Theme.colors.text,
-    fontVariant: ['tabular-nums'],
-  },
-  dayTextSelected: {
-    color: Theme.colors.textInverse,
-  },
-  daySub: {
-    fontSize: 10,
-    fontWeight: '700',
+  badgeTagText: {
     color: Theme.colors.textMuted,
-    marginTop: 2,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  daySubSelected: {
-    color: Theme.colors.textInverse,
+  trackTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Theme.colors.text,
   },
-  submitButton: {
+  trackSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
+    marginTop: 1,
+  },
+  checkArea: {
+    paddingTop: 2,
+  },
+  cardDescription: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  featuresList: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 12,
+    gap: 8,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  featureText: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  continueButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -361,9 +330,8 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: Theme.borderRadius.md,
     gap: 8,
-    marginTop: 32,
   },
-  submitButtonText: {
+  continueButtonText: {
     color: Theme.colors.textInverse,
     fontSize: 14,
     fontWeight: '800',
@@ -374,5 +342,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     textAlign: 'center',
     marginTop: 14,
+    lineHeight: 16,
   },
 });

@@ -3,11 +3,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type UserFlowType = 'new_user' | 'existing_user';
+export type OnboardingTrack = 'advanced' | 'guided';
 
 export interface UserProfile {
   id?: string;
   email?: string;
   name?: string;
+  onboardingTrack?: OnboardingTrack;
   experienceLevel?: 'iniciante' | 'intermediario' | 'avancado';
   primaryGoal?: 'forca_pura' | 'hipertrofia' | 'recomposicao';
   preferredDaysPerWeek?: number;
@@ -19,10 +21,12 @@ export interface UserProfile {
 interface UserStoreState {
   hasCompletedOnboarding: boolean;
   userFlow: UserFlowType;
+  onboardingTrack: OnboardingTrack | null;
   profile: UserProfile | null;
 
   // Ações de gerenciamento dos fluxos
   setUserFlow: (flow: UserFlowType) => void;
+  setOnboardingTrack: (track: OnboardingTrack) => void;
   setProfile: (profile: Partial<UserProfile>) => void;
   completeOnboarding: (profileData?: Partial<UserProfile>) => void;
   resetUserFlow: () => void;
@@ -33,10 +37,18 @@ export const useUserStore = create<UserStoreState>()(
     (set, get) => ({
       hasCompletedOnboarding: false,
       userFlow: 'existing_user',
+      onboardingTrack: null,
       profile: null,
 
       setUserFlow: (flow: UserFlowType) => {
         set({ userFlow: flow });
+      },
+
+      setOnboardingTrack: (track: OnboardingTrack) => {
+        set({ 
+          onboardingTrack: track,
+          profile: { ...(get().profile || {}), onboardingTrack: track }
+        });
       },
 
       setProfile: (updates: Partial<UserProfile>) => {
@@ -71,6 +83,7 @@ export const useUserStore = create<UserStoreState>()(
       partialize: state => ({
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         userFlow: state.userFlow,
+        onboardingTrack: state.onboardingTrack,
         profile: state.profile,
       }),
     }
