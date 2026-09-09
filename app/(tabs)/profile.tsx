@@ -33,7 +33,10 @@ import {
   X,
   Check,
   Zap,
-  Sparkles
+  Sparkles,
+  Activity,
+  Download,
+  Upload
 } from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { useUserStore, UserProfile } from '../../src/store/userStore';
@@ -41,6 +44,13 @@ import { getRoutines } from '../../src/database/database';
 import { Routine } from '../../src/types/workout';
 import { auth, signOut } from '../../src/services/firebase';
 import { processSyncQueue } from '../../src/services/syncQueueService';
+import { 
+  getHealthConnectStatus, 
+  requestHealthConnectAccess, 
+  importBiometricsFromHealthConnect, 
+  exportAllWorkoutsToHealthConnect,
+  HealthConnectStatus 
+} from '../../src/services/healthConnectService';
 import Theme from '../../src/theme/theme';
 
 export default function AthleteControlCenterScreen() {
@@ -60,6 +70,11 @@ export default function AthleteControlCenterScreen() {
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
+  // Estado da Conexão com Health Connect
+  const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
+  const [isHealthSyncing, setIsHealthSyncing] = useState(false);
+  const [healthFeedback, setHealthFeedback] = useState<string | null>(null);
+
   // Form temporário para edição de métricas
   const [tempWeight, setTempWeight] = useState(String(profile?.bodyWeightKg || 80));
   const [tempHeight, setTempHeight] = useState(String(profile?.heightCm || 178));
@@ -71,7 +86,65 @@ export default function AthleteControlCenterScreen() {
   useEffect(() => {
     loadFromDatabase();
     refreshRoutines();
+    checkHealth();
   }, []);
+
+  const checkHealth = async () => {
+    try {
+      const status = await getHealthConnectStatus();
+      setHealthStatus(status);
+    } catch {}
+  };
+
+  const handleConnectHealth = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const granted = await requestHealthConnectAccess();
+    await checkHealth();
+    if (granted) {
+      setHealthFeedback('Health Connect conectado com sucesso.');
+    } else {
+      setHealthFeedback('Permissões pendentes ou não concedidas.');
+    }
+    setTimeout(() => setHealthFeedback(null), 4000);
+  };
+
+  const handleImportBiometrics = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setIsHealthSyncing(true);
+    setHealthFeedback(null);
+    try {
+      const res = await importBiometricsFromHealthConnect();
+      setHealthFeedback(res.message);
+      if (res.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch {
+      setHealthFeedback('Erro ao comunicar com o Health Connect.');
+    } finally {
+      setIsHealthSyncing(false);
+      setTimeout(() => setHealthFeedback(null), 5000);
+    }
+  };
+
+  const handleExportWorkouts = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setIsHealthSyncing(true);
+    setHealthFeedback(null);
+    try {
+      const res = await exportAllWorkoutsToHealthConnect(workoutHistory);
+      if (res.total === 0) {
+        setHealthFeedback('Nenhum treino concluído para exportar.');
+      } else {
+        setHealthFeedback(`${res.exported} de ${res.total} treino(s) exportado(s) com sucesso.`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch {
+      setHealthFeedback('Erro ao exportar treinos para o Health Connect.');
+    } finally {
+      setIsHealthSyncing(false);
+      setTimeout(() => setHealthFeedback(null), 5000);
+    }
+  };
 
   const refreshRoutines = () => {
     try {
@@ -411,7 +484,78 @@ export default function AthleteControlCenterScreen() {
           </View>
         </View>
 
-        {/* 5. Conta & Sincronização em Nuvem */}
+        {/* 5. Integração com Google Health Connect */}
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Activity size={16} color={Theme.colors.primary} />
+          <Text style={styles.sectionTitle}>Google Health Connect</Text>
+          <View style={[
+            styles.badgeOffline, 
+            healthStatus?.hasPermissions 
+              ? { backgroundColor: 'rgba(16, 185, 129, 0.1)' } 
+              : { backgroundColor: 'rgba(255, 255, 255, 0.06)' }
+          ]}>
+            <CheckCircle2 
+              size={12} 
+              color={healthStatus?.hasPermissions ? Theme.colors.success : Theme.colors.textMuted} 
+            />
+            <Text style={[
+              styles.badgeOfflineText, 
+              healthStatus?.hasPermissions ? { color: Theme.colors.success } : { color: Theme.colors.textMuted }
+            ]}>
+              {healthStatus?.hasPermissions ? 'Conectado' : healthStatus?.isSupported ? 'Disponível' : 'Android'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.healthCard}>
+          <View style={styles.healthHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.healthTitle}>Sincronização Bidirecional</Text>
+              <Text style={styles.healthSub}>
+                {healthFeedback || 'Importe peso/altura do Health Connect e exporte suas sessões de força.'}
+              </Text>
+            </View>
+          </View>
+
+          {!healthStatus?.hasPermissions ? (
+            <TouchableOpacity 
+              style={styles.connectHealthBtn}
+              onPress={handleConnectHealth}
+              activeOpacity={0.8}
+            >
+              <Activity size={15} color={Theme.colors.background} />
+              <Text style={styles.connectHealthBtnText}>Conectar com Health Connect</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.healthActionsGrid}>
+              <TouchableOpacity 
+                style={styles.healthActionBtn}
+                onPress={handleImportBiometrics}
+                disabled={isHealthSyncing}
+                activeOpacity={0.7}
+              >
+                <Download size={14} color={Theme.colors.primary} />
+                <Text style={styles.healthActionBtnText}>
+                  {isHealthSyncing ? 'Buscando...' : 'Puxar Métricas'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.healthActionBtn, { backgroundColor: Theme.colors.surfaceCard }]}
+                onPress={handleExportWorkouts}
+                disabled={isHealthSyncing}
+                activeOpacity={0.7}
+              >
+                <Upload size={14} color={Theme.colors.primary} />
+                <Text style={styles.healthActionBtnText}>
+                  {isHealthSyncing ? 'Exportando...' : 'Exportar Treinos'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* 6. Conta & Sincronização em Nuvem */}
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Cloud size={16} color={Theme.colors.primary} />
           <Text style={styles.sectionTitle}>Sincronização em Nuvem</Text>
@@ -963,6 +1107,65 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.textMuted,
     marginTop: 2,
+  },
+  healthCard: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  healthHeader: {
+    marginBottom: 12,
+  },
+  healthTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  healthSub: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  connectHealthBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    gap: 8,
+    marginTop: 6,
+  },
+  connectHealthBtnText: {
+    color: Theme.colors.background,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  healthActionsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  healthActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    gap: 6,
+  },
+  healthActionBtnText: {
+    color: Theme.colors.text,
+    fontSize: 12,
+    fontWeight: '700',
   },
   cloudCard: {
     backgroundColor: Theme.colors.surface,
