@@ -155,3 +155,17 @@ export interface LastExercisePerformance {
   bestEstimated1RM: number;
 }
 
+export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'failed';
+
+export interface SyncQueueItem {
+  id: string;
+  entityType: 'workout_session' | string;
+  entityId: string;
+  payload: string;
+  attempts: number;
+  lastAttemptAt?: string;
+  errorMessage?: string;
+  status: SyncStatus;
+  createdAt: string;
+}
+

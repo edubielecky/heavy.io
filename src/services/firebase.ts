@@ -50,6 +50,10 @@ export const auth = (() => {
 
 export const googleProvider = new GoogleAuthProvider();
 
+import { getFirestore, Firestore } from 'firebase/firestore';
+
+export const firestore: Firestore = getFirestore(app);
+
 export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,

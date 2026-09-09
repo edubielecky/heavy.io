@@ -105,4 +105,19 @@ CREATE TABLE IF NOT EXISTS personal_records (
   achieved_at TEXT NOT NULL,
   FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
 );
+
+-- Fila de Sincronização Local (Offline Sync Queue)
+CREATE TABLE IF NOT EXISTS sync_queue (
+  id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL DEFAULT 'workout_session',
+  entity_id TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at TEXT,
+  error_message TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, created_at ASC);
 `;

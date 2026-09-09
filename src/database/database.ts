@@ -14,7 +14,9 @@ import {
   WorkoutExercise,
   WorkoutSet,
   SetType,
-  LastExercisePerformance
+  LastExercisePerformance,
+  SyncQueueItem,
+  SyncStatus
 } from '../types/workout';
 
 const DB_NAME = 'heavy_io.db';
@@ -878,7 +880,23 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
     [endTime, durationSeconds, totalVolumeKg, totalSets, sessionId]
   );
 
-  return getWorkoutSession(sessionId);
+  const completedSession = getWorkoutSession(sessionId);
+
+  // 1. Grava localmente primeiro na fila de sincronização (Sync Queue)
+  if (completedSession) {
+    enqueueForSync('workout_session', sessionId, completedSession);
+
+    // Dispara gatilho assíncrono se o serviço de sincronização estiver ativo
+    if (typeof (globalThis as any).__heavy_syncQueueTrigger === 'function') {
+      try {
+        (globalThis as any).__heavy_syncQueueTrigger();
+      } catch (err) {
+        console.warn('Gatilho de sincronização em segundo plano:', err);
+      }
+    }
+  }
+
+  return completedSession;
 };
 
 /**
@@ -910,3 +928,93 @@ export const deleteWorkoutSession = (sessionId: string): void => {
     db.runSync('DELETE FROM workout_sessions WHERE id = ?;', [sessionId]);
   });
 };
+
+/**
+ * ============================================================================
+ * MÉTODOS DA FILA DE SINCRONIZAÇÃO (OFFLINE SYNC QUEUE)
+ * ============================================================================
+ */
+
+/**
+ * Enfileira uma entidade para sincronização na nuvem com garantia de persistência local no SQLite.
+ */
+export const enqueueForSync = (
+  entityType: 'workout_session' | string,
+  entityId: string,
+  payload: any
+): void => {
+  const db = getDatabase();
+  const id = `sync_${entityType}_${entityId}`;
+  const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
+
+  db.runSync(
+    `INSERT INTO sync_queue (id, entity_type, entity_id, payload, attempts, status, created_at)
+     VALUES (?, ?, ?, ?, 0, 'pending', datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET 
+       payload = excluded.payload, 
+       status = 'pending', 
+       attempts = 0, 
+       error_message = NULL;`,
+    [id, entityType, entityId, serialized]
+  );
+};
+
+/**
+ * Recupera itens pendentes de sincronização elegíveis para envio ou re-tentativa.
+ */
+export const getPendingSyncItems = (limit: number = 20): SyncQueueItem[] => {
+  const db = getDatabase();
+  try {
+    const rows = db.getAllSync<any>(
+      `SELECT id, entity_type, entity_id, payload, attempts, last_attempt_at, error_message, status, created_at
+       FROM sync_queue
+       WHERE status IN ('pending', 'failed') AND attempts < 5
+       ORDER BY created_at ASC
+       LIMIT ?;`,
+      [limit]
+    );
+
+    return rows.map(r => ({
+      id: r.id,
+      entityType: r.entity_type,
+      entityId: r.entity_id,
+      payload: r.payload,
+      attempts: r.attempts,
+      lastAttemptAt: r.last_attempt_at || undefined,
+      errorMessage: r.error_message || undefined,
+      status: r.status as SyncStatus,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Atualiza o status e contador de tentativas de um item da fila.
+ */
+export const updateSyncItemStatus = (
+  id: string,
+  status: SyncStatus,
+  errorMessage?: string
+): void => {
+  const db = getDatabase();
+  db.runSync(
+    `UPDATE sync_queue 
+     SET status = ?, 
+         attempts = attempts + 1, 
+         last_attempt_at = datetime('now'),
+         error_message = ?
+     WHERE id = ?;`,
+    [status, errorMessage || null, id]
+  );
+};
+
+/**
+ * Remove o item da fila após sincronização bem-sucedida.
+ */
+export const removeSyncedItem = (id: string): void => {
+  const db = getDatabase();
+  db.runSync('DELETE FROM sync_queue WHERE id = ?;', [id]);
+};
+

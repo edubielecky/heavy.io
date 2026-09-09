@@ -30,6 +30,7 @@ import {
   cancelRestTimerNotification,
   triggerRestFinishedHaptics,
 } from '../services/notificationService';
+import { processSyncQueue } from '../services/syncQueueService';
 
 
 // Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
@@ -238,6 +239,9 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
           cancelRestTimerNotification();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+          // Dispara sincronização em nuvem se houver conexão ativa
+          processSyncQueue().catch(() => {});
 
           set({
             currentWorkout: null,

@@ -20,6 +20,7 @@ SplashScreen.preventAutoHideAsync();
 
 import { initDatabase } from '../src/database/database';
 import { initNotificationService, requestNotificationPermissions } from '../src/services/notificationService';
+import { initSyncQueue } from '../src/services/syncQueueService';
 import * as Notifications from 'expo-notifications';
 
 export default function RootLayout() {
@@ -38,8 +39,9 @@ export default function RootLayout() {
         initDatabase();
         initNotificationService();
         requestNotificationPermissions();
+        initSyncQueue();
       } catch (e) {
-        console.error('Failed to initialize SQLite or Notifications:', e);
+        console.error('Failed to initialize SQLite, Notifications, or SyncQueue:', e);
       }
       SplashScreen.hideAsync();
     }
