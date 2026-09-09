@@ -132,8 +132,26 @@ export interface PersonalRecord {
 }
 
 export interface RestTimerState {
+  targetEndTime: number | null; // Timestamp absoluto em ms (Date.now() + segundos * 1000)
   remainingSeconds: number;
   totalSeconds: number;
+  exerciseId?: string;
   exerciseName: string;
   isRunning: boolean;
 }
+
+export interface LastExercisePerformance {
+  sessionId: string;
+  date: string;
+  sets: {
+    setNumber: number;
+    type: SetType;
+    weightKg: number;
+    reps: number;
+    rpe?: number;
+    rir?: number;
+  }[];
+  bestWeightKg: number;
+  bestEstimated1RM: number;
+}
+

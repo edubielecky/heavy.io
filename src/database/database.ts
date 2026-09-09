@@ -12,7 +12,9 @@ import {
   WorkoutSession, 
   PersonalRecord,
   WorkoutExercise,
-  WorkoutSet
+  WorkoutSet,
+  SetType,
+  LastExercisePerformance
 } from '../types/workout';
 
 const DB_NAME = 'heavy_io.db';
@@ -449,3 +451,262 @@ export const savePersonalRecord = (pr: PersonalRecord): void => {
     ]
   );
 };
+
+/**
+ * 1. getWorkoutSession(id): Busca a sessão ativa com exercícios e séries já ordenados.
+ */
+export const getWorkoutSession = (id: string): WorkoutSession | null => {
+  const db = getDatabase();
+  const sessionRow = db.getFirstSync<any>(
+    'SELECT * FROM workout_sessions WHERE id = ?;',
+    [id]
+  );
+
+  if (!sessionRow) return null;
+
+  const exRows = db.getAllSync<any>(
+    `SELECT wse.*, e.name as exercise_name, e.target_muscle 
+     FROM workout_session_exercises wse
+     JOIN exercises e ON wse.exercise_id = e.id
+     WHERE wse.session_id = ?
+     ORDER BY wse.order_index ASC;`,
+    [id]
+  );
+
+  const exercises: WorkoutExercise[] = exRows.map(e => {
+    const setRows = db.getAllSync<any>(
+      'SELECT * FROM workout_sets WHERE session_exercise_id = ? ORDER BY set_number ASC;',
+      [e.id]
+    );
+
+    const sets: WorkoutSet[] = setRows.map(st => ({
+      id: st.id,
+      setNumber: st.set_number,
+      type: st.type as SetType,
+      weightKg: st.weight_kg,
+      reps: st.reps,
+      rpe: st.rpe ?? undefined,
+      rir: st.rir ?? undefined,
+      completed: st.completed === 1,
+      completedAt: st.completed_at ?? undefined,
+    }));
+
+    return {
+      id: e.id,
+      exerciseId: e.exercise_id,
+      exerciseName: e.exercise_name,
+      targetMuscle: e.target_muscle as MuscleGroup,
+      sets,
+      notes: e.notes ?? undefined,
+    };
+  });
+
+  return {
+    id: sessionRow.id,
+    routineId: sessionRow.routine_id ?? undefined,
+    name: sessionRow.name,
+    startTime: sessionRow.start_time,
+    endTime: sessionRow.end_time ?? undefined,
+    durationSeconds: sessionRow.duration_seconds,
+    totalTonnageKg: sessionRow.total_volume_kg,
+    totalSets: sessionRow.total_sets,
+    isCompleted: sessionRow.is_completed === 1,
+    notes: sessionRow.notes ?? undefined,
+    exercises,
+  };
+};
+
+/**
+ * 2. getLastExercisePerformance(exerciseId): Traz as cargas e repetições da última vez que o exercício foi executado (o "fantasma" que guia a sobrecarga progressiva).
+ */
+export const getLastExercisePerformance = (
+  exerciseId: string
+): LastExercisePerformance | null => {
+  const db = getDatabase();
+
+  // Busca a última sessão concluída que teve este exercício
+  const lastSession = db.getFirstSync<{
+    session_id: string;
+    start_time: string;
+    session_exercise_id: string;
+  }>(
+    `SELECT ws.id as session_id, ws.start_time, wse.id as session_exercise_id
+     FROM workout_sessions ws
+     JOIN workout_session_exercises wse ON ws.id = wse.session_id
+     WHERE wse.exercise_id = ? AND ws.is_completed = 1
+     ORDER BY ws.start_time DESC
+     LIMIT 1;`,
+    [exerciseId]
+  );
+
+  if (!lastSession) return null;
+
+  const setRows = db.getAllSync<any>(
+    `SELECT set_number, type, weight_kg, reps, rpe, rir 
+     FROM workout_sets 
+     WHERE session_exercise_id = ? AND completed = 1
+     ORDER BY set_number ASC;`,
+    [lastSession.session_exercise_id]
+  );
+
+  if (!setRows || setRows.length === 0) return null;
+
+  let bestWeight = 0;
+  let best1RM = 0;
+
+  const sets = setRows.map(st => {
+    const weight = st.weight_kg;
+    const reps = st.reps;
+    if (weight > bestWeight) bestWeight = weight;
+    const est1RM = weight > 0 && reps > 0 ? weight * (1 + reps / 30) : 0;
+    if (est1RM > best1RM) best1RM = Math.round(est1RM * 10) / 10;
+
+    return {
+      setNumber: st.set_number,
+      type: st.type as SetType,
+      weightKg: weight,
+      reps: reps,
+      rpe: st.rpe ?? undefined,
+      rir: st.rir ?? undefined,
+    };
+  });
+
+  return {
+    sessionId: lastSession.session_id,
+    date: lastSession.start_time,
+    sets,
+    bestWeightKg: bestWeight,
+    bestEstimated1RM: best1RM,
+  };
+};
+
+/**
+ * 3. logSet(params): Insere ou atualiza o set instantaneamente no banco SQLite.
+ */
+export const logSet = (params: {
+  id?: string;
+  sessionExerciseId: string;
+  setNumber?: number;
+  type?: SetType;
+  weightKg: number;
+  reps: number;
+  rpe?: number;
+  rir?: number;
+  completed?: boolean;
+}): WorkoutSet => {
+  const db = getDatabase();
+
+  const id = params.id || `set_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  const type = params.type || 'normal';
+  const completed = params.completed ?? true;
+  const completedAt = completed ? new Date().toISOString() : null;
+
+  // Se setNumber não foi informado, obtém o próximo incremental
+  let setNumber = params.setNumber;
+  if (setNumber === undefined) {
+    const existing = db.getFirstSync<{ max_set: number | null }>(
+      'SELECT MAX(set_number) as max_set FROM workout_sets WHERE session_exercise_id = ?;',
+      [params.sessionExerciseId]
+    );
+    setNumber = (existing?.max_set || 0) + 1;
+  }
+
+  db.runSync(
+    `INSERT OR REPLACE INTO workout_sets (
+      id, session_exercise_id, set_number, type, weight_kg, reps, rpe, rir, completed, completed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      id,
+      params.sessionExerciseId,
+      setNumber,
+      type,
+      params.weightKg,
+      params.reps,
+      params.rpe ?? null,
+      params.rir ?? null,
+      completed ? 1 : 0,
+      completedAt,
+    ]
+  );
+
+  // Se concluído com valores válidos, checa e atualiza Recorde Pessoal (PR)
+  if (completed && params.weightKg > 0 && params.reps > 0) {
+    const exInfo = db.getFirstSync<{ exercise_id: string; exercise_name: string }>(
+      `SELECT wse.exercise_id, e.name as exercise_name
+       FROM workout_session_exercises wse
+       JOIN exercises e ON wse.exercise_id = e.id
+       WHERE wse.id = ?;`,
+      [params.sessionExerciseId]
+    );
+
+    if (exInfo) {
+      const est1RM = Math.round(params.weightKg * (1 + params.reps / 30) * 10) / 10;
+      const currentPR = db.getFirstSync<any>(
+        'SELECT * FROM personal_records WHERE exercise_id = ?;',
+        [exInfo.exercise_id]
+      );
+
+      if (!currentPR || params.weightKg > currentPR.max_weight_kg || est1RM > currentPR.estimated_1rm) {
+        savePersonalRecord({
+          exerciseId: exInfo.exercise_id,
+          exerciseName: exInfo.exercise_name,
+          maxWeightKg: Math.max(params.weightKg, currentPR?.max_weight_kg || 0),
+          repsAtMaxWeight: params.reps,
+          estimated1RM: Math.max(est1RM, currentPR?.estimated_1rm || 0),
+          achievedAt: completedAt || new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  return {
+    id,
+    setNumber,
+    type,
+    weightKg: params.weightKg,
+    reps: params.reps,
+    rpe: params.rpe,
+    rir: params.rir,
+    completed,
+    completedAt: completedAt || undefined,
+  };
+};
+
+/**
+ * 4. completeWorkout(sessionId): Calcula e fecha o volume total e tempo da sessão no banco.
+ */
+export const completeWorkout = (sessionId: string): WorkoutSession | null => {
+  const db = getDatabase();
+
+  const session = getWorkoutSession(sessionId);
+  if (!session) return null;
+
+  const endTime = new Date().toISOString();
+  const startMs = new Date(session.startTime).getTime();
+  const endMs = new Date(endTime).getTime();
+  const durationSeconds = Math.max(1, Math.floor((endMs - startMs) / 1000));
+
+  // Calcula volume total e total de séries concluídas
+  const stats = db.getFirstSync<{ total_volume: number | null; completed_sets: number | null }>(
+    `SELECT 
+       SUM(ws.weight_kg * ws.reps) as total_volume,
+       COUNT(ws.id) as completed_sets
+     FROM workout_sets ws
+     JOIN workout_session_exercises wse ON ws.session_exercise_id = wse.id
+     WHERE wse.session_id = ? AND ws.completed = 1 AND ws.weight_kg > 0 AND ws.reps > 0;`,
+    [sessionId]
+  );
+
+  const totalVolumeKg = Math.round(stats?.total_volume || 0);
+  const totalSets = stats?.completed_sets || 0;
+
+  db.runSync(
+    `UPDATE workout_sessions 
+     SET end_time = ?, duration_seconds = ?, total_volume_kg = ?, total_sets = ?, is_completed = 1
+     WHERE id = ?;`,
+    [endTime, durationSeconds, totalVolumeKg, totalSets, sessionId]
+  );
+
+  return getWorkoutSession(sessionId);
+};
+

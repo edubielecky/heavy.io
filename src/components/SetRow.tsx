@@ -7,6 +7,7 @@ import Theme from '../theme/theme';
 interface SetRowProps {
   workoutExerciseId: string;
   set: WorkoutSet;
+  previousPerformance?: string;
   onUpdate: (updates: Partial<WorkoutSet>) => void;
   onToggleComplete: () => void;
   onDelete: () => void;
@@ -14,6 +15,7 @@ interface SetRowProps {
 
 export const SetRow: React.FC<SetRowProps> = ({
   set,
+  previousPerformance,
   onUpdate,
   onToggleComplete,
   onDelete,
@@ -50,6 +52,13 @@ export const SetRow: React.FC<SetRowProps> = ({
       >
         <Text style={[styles.badgeText, { color: badge.text }]}>{badge.label}</Text>
       </TouchableOpacity>
+
+      {/* Fantasma da Performance Anterior */}
+      <View style={styles.previousBox}>
+        <Text style={previousPerformance ? styles.previousText : styles.previousEmpty}>
+          {previousPerformance || '—'}
+        </Text>
+      </View>
 
       {/* Carga (Kg) */}
       <View style={styles.inputContainer}>
@@ -140,6 +149,22 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 13,
     fontWeight: '800',
+  },
+  previousBox: {
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  previousText: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  previousEmpty: {
+    color: Theme.colors.borderLight,
+    fontSize: 12,
   },
   inputContainer: {
     flex: 1,
