@@ -5,6 +5,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type UserFlowType = 'new_user' | 'existing_user';
 export type OnboardingTrack = 'advanced' | 'guided';
 
+export interface UserPreferences {
+  defaultRestSeconds: number; // 60, 90, 120, 180
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+}
+
 export interface UserProfile {
   id?: string;
   email?: string;
@@ -23,12 +29,16 @@ interface UserStoreState {
   userFlow: UserFlowType;
   onboardingTrack: OnboardingTrack | null;
   profile: UserProfile | null;
+  preferences: UserPreferences;
 
   // Ações de gerenciamento dos fluxos
   setUserFlow: (flow: UserFlowType) => void;
   setOnboardingTrack: (track: OnboardingTrack) => void;
   setProfile: (profile: Partial<UserProfile>) => void;
+  updateMetrics: (metrics: Partial<UserProfile>) => void;
+  updatePreferences: (prefs: Partial<UserPreferences>) => void;
   completeOnboarding: (profileData?: Partial<UserProfile>) => void;
+  resetOnboarding: () => void;
   resetUserFlow: () => void;
 }
 
@@ -38,7 +48,17 @@ export const useUserStore = create<UserStoreState>()(
       hasCompletedOnboarding: false,
       userFlow: 'existing_user',
       onboardingTrack: null,
-      profile: null,
+      profile: {
+        experienceLevel: 'intermediario',
+        preferredDaysPerWeek: 4,
+        bodyWeightKg: 80,
+        heightCm: 178,
+      },
+      preferences: {
+        defaultRestSeconds: 90,
+        soundEnabled: true,
+        vibrationEnabled: true,
+      },
 
       setUserFlow: (flow: UserFlowType) => {
         set({ userFlow: flow });
@@ -56,6 +76,16 @@ export const useUserStore = create<UserStoreState>()(
         set({ profile: { ...current, ...updates } });
       },
 
+      updateMetrics: (updates: Partial<UserProfile>) => {
+        const current = get().profile || {};
+        set({ profile: { ...current, ...updates } });
+      },
+
+      updatePreferences: (updates: Partial<UserPreferences>) => {
+        const current = get().preferences;
+        set({ preferences: { ...current, ...updates } });
+      },
+
       completeOnboarding: (profileData?: Partial<UserProfile>) => {
         const current = get().profile || {};
         set({
@@ -66,6 +96,13 @@ export const useUserStore = create<UserStoreState>()(
             ...(profileData || {}),
             createdAt: current.createdAt || new Date().toISOString(),
           },
+        });
+      },
+
+      resetOnboarding: () => {
+        set({
+          hasCompletedOnboarding: false,
+          userFlow: 'new_user',
         });
       },
 
@@ -85,6 +122,7 @@ export const useUserStore = create<UserStoreState>()(
         userFlow: state.userFlow,
         onboardingTrack: state.onboardingTrack,
         profile: state.profile,
+        preferences: state.preferences,
       }),
     }
   )

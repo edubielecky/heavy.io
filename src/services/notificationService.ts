@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
+import { useUserStore } from '../store/userStore';
 
 // ID único do canal do cronômetro de descanso para Android
 export const REST_TIMER_CHANNEL_ID = 'rest_timer_channel';
@@ -13,13 +14,16 @@ let isInitialized = false;
  * Garante alerta na tela (banner/list), som e vibração mesmo com app em foreground.
  */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async () => {
+    const prefs = useUserStore.getState().preferences;
+    return {
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: prefs?.soundEnabled ?? true,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /**
@@ -110,13 +114,17 @@ export async function scheduleRestTimerNotification(
       ? `Hora da próxima série de ${exerciseName}!`
       : 'Hora da próxima série! Foco e sobrecarga.';
 
+    const prefs = useUserStore.getState().preferences;
+    const sound = prefs?.soundEnabled ?? true;
+    const vibrate = prefs?.vibrationEnabled ? [0, 500, 200, 500] : undefined;
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
-        sound: true,
+        sound,
         priority: Notifications.AndroidNotificationPriority.MAX,
-        vibrate: [0, 500, 200, 500],
+        vibrate,
         data: {
           type: 'REST_TIMER_COMPLETED',
           exerciseName: exerciseName || '',
@@ -161,6 +169,9 @@ export async function cancelRestTimerNotification(): Promise<void> {
  * Feedback tátil cirúrgico e vigoroso para término do descanso (quando o app está em primeiro plano).
  */
 export async function triggerRestFinishedHaptics(): Promise<void> {
+  const prefs = useUserStore.getState().preferences;
+  if (prefs?.vibrationEnabled === false) return;
+
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     setTimeout(() => {
@@ -173,3 +184,4 @@ export async function triggerRestFinishedHaptics(): Promise<void> {
     // Silencia em plataformas sem suporte
   }
 }
+

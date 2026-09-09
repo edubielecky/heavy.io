@@ -31,6 +31,7 @@ import {
   triggerRestFinishedHaptics,
 } from '../services/notificationService';
 import { processSyncQueue } from '../services/syncQueueService';
+import { useUserStore } from './userStore';
 
 
 // Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
@@ -486,8 +487,8 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         if (justCompleted) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           
-          // Recupera o tempo de descanso padrão do exercício se cadastrado
-          let restSeconds = 90;
+          // Recupera o tempo de descanso padrão do exercício ou das preferências do atleta
+          let restSeconds = useUserStore.getState().preferences?.defaultRestSeconds || 90;
           try {
             const exInfo = getExerciseById(targetExerciseId);
             if (exInfo?.defaultRestSeconds && exInfo.defaultRestSeconds > 0) {
