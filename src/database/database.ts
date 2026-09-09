@@ -343,6 +343,60 @@ export const createCustomExercise = (
   };
 };
 
+export const updateCustomExercise = (
+  exerciseId: string,
+  updates: Partial<Omit<Exercise, 'id' | 'isCustom' | 'createdAt'>>
+): Exercise | null => {
+  const db = getDatabase();
+  const existing = getExerciseById(exerciseId);
+  if (!existing || !existing.isCustom) return null;
+
+  const updated: Exercise = {
+    ...existing,
+    ...updates,
+    synergistMuscles: updates.synergistMuscles ?? existing.synergistMuscles,
+  };
+
+  db.runSync(
+    `UPDATE exercises SET 
+      name = ?, 
+      name_en = ?, 
+      target_muscle = ?, 
+      synergist_muscles = ?, 
+      movement_pattern = ?, 
+      mechanic = ?, 
+      equipment = ?, 
+      plane_of_motion = ?, 
+      default_rest_seconds = ?, 
+      instructions = ?
+    WHERE id = ? AND is_custom = 1;`,
+    [
+      updated.name,
+      updated.nameEn ?? null,
+      updated.targetMuscle,
+      JSON.stringify(updated.synergistMuscles),
+      updated.movementPattern,
+      updated.mechanic,
+      updated.equipment,
+      updated.planeOfMotion ?? null,
+      updated.defaultRestSeconds,
+      updated.instructions ?? null,
+      exerciseId,
+    ]
+  );
+
+  return updated;
+};
+
+export const deleteCustomExercise = (exerciseId: string): boolean => {
+  const db = getDatabase();
+  const existing = getExerciseById(exerciseId);
+  if (!existing || !existing.isCustom) return false;
+
+  db.runSync('DELETE FROM exercises WHERE id = ? AND is_custom = 1;', [exerciseId]);
+  return true;
+};
+
 /**
  * CONSULTAS DE ROTINAS
  */

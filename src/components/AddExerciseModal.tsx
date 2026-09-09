@@ -9,9 +9,10 @@ import {
   StyleSheet, 
   SafeAreaView 
 } from 'react-native';
-import { Search, X, Dumbbell, Plus } from 'lucide-react-native';
+import { Search, X, Dumbbell, Plus, Sparkles } from 'lucide-react-native';
 import { getExercises } from '../database/database';
 import { Exercise, MuscleGroup } from '../types/workout';
+import { CustomExerciseModal } from './CustomExerciseModal';
 import Theme from '../theme/theme';
 
 interface AddExerciseModalProps {
@@ -42,6 +43,7 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'todos'>('todos');
+  const [customModalOpen, setCustomModalOpen] = useState(false);
 
   // Consulta instantânea no banco SQLite
   const exercisesList = useMemo(() => {
@@ -49,7 +51,7 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
       targetMuscle: selectedMuscle,
       search,
     });
-  }, [selectedMuscle, search, visible]);
+  }, [selectedMuscle, search, visible, customModalOpen]);
 
   const handleSelect = (exercise: Exercise) => {
     onSelectExercise(exercise);
@@ -68,9 +70,19 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
                 {exercisesList.length} exercícios disponíveis
               </Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={22} color={Theme.colors.text} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity 
+                style={styles.newCustomBtn}
+                onPress={() => setCustomModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <Plus size={13} color={Theme.colors.textInverse} />
+                <Text style={styles.newCustomBtnText}>Criar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                <X size={22} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Search Bar */}
@@ -135,6 +147,12 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>{item.name}</Text>
                   <View style={styles.itemMeta}>
+                    {item.isCustom && (
+                      <View style={styles.customBadge}>
+                        <Sparkles size={8} color={Theme.colors.primary} />
+                        <Text style={styles.customBadgeText}>CUSTOM</Text>
+                      </View>
+                    )}
                     <View style={styles.itemBadge}>
                       <Text style={styles.itemBadgeText}>{item.targetMuscle.toUpperCase()}</Text>
                     </View>
@@ -155,6 +173,16 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
             }
           />
         </View>
+
+        {/* Modal de Criação de Exercício Customizado Rápido */}
+        <CustomExerciseModal
+          visible={customModalOpen}
+          onClose={() => setCustomModalOpen(false)}
+          onSave={(created) => {
+            setCustomModalOpen(false);
+            handleSelect(created);
+          }}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -190,6 +218,20 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 6,
+  },
+  newCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  newCustomBtnText: {
+    color: Theme.colors.textInverse,
+    fontSize: 12,
+    fontWeight: '800',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -272,6 +314,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  customBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  customBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: Theme.colors.text,
+    letterSpacing: 0.5,
   },
   itemBadge: {
     backgroundColor: Theme.colors.surfaceElevated,

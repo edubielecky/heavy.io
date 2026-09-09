@@ -20,12 +20,17 @@ import {
   Activity, 
   TrendingUp, 
   ChevronRight,
-  Filter
+  Filter,
+  Plus,
+  Pencil,
+  Trash2,
+  Sparkles
 } from 'lucide-react-native';
-import { getExercises } from '../../src/database/database';
+import { getExercises, deleteCustomExercise } from '../../src/database/database';
 import { Exercise, MuscleGroup, Equipment } from '../../src/types/workout';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { ExerciseProgressModal } from '../../src/components/ExerciseProgressModal';
+import { CustomExerciseModal } from '../../src/components/CustomExerciseModal';
 import Theme from '../../src/theme/theme';
 
 const MUSCLE_GROUPS: { label: string; value: MuscleGroup | 'todos' }[] = [
@@ -60,6 +65,11 @@ export default function ExercisesScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Estados de Criação / Edição de Exercício Customizado
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [exerciseToEdit, setExerciseToEdit] = useState<Exercise | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const { currentWorkout, addExerciseToCurrentWorkout, personalRecords, loadFromDatabase } = useWorkoutStore();
 
   useFocusEffect(
@@ -75,12 +85,47 @@ export default function ExercisesScreen() {
       equipment: selectedEquipment,
       search,
     });
-  }, [selectedMuscle, selectedEquipment, search]);
+  }, [selectedMuscle, selectedEquipment, search, refreshKey]);
 
   const handleOpenExercise = (exercise: Exercise) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedExercise(exercise);
     setModalVisible(true);
+  };
+
+  const handleOpenCreateExercise = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setExerciseToEdit(null);
+    setCustomModalVisible(true);
+  };
+
+  const handleEditExercise = (exercise: Exercise) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setExerciseToEdit(exercise);
+    setCustomModalVisible(true);
+  };
+
+  const handleDeleteExercise = (exercise: Exercise) => {
+    Alert.alert(
+      'Excluir Exercício Customizado?',
+      `Deseja realmente remover "${exercise.name}" do seu catálogo?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => {
+            const success = deleteCustomExercise(exercise.id);
+            if (success) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              setRefreshKey(prev => prev + 1);
+            } else {
+              Alert.alert('Erro', 'Não foi possível excluir o exercício.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleQuickAdd = (exercise: Exercise) => {
@@ -99,12 +144,24 @@ export default function ExercisesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header Superior */}
+        {/* Header Superior com Botão de Novo Exercício */}
         <View style={styles.header}>
-          <Text style={styles.title}>Biblioteca de Exercícios</Text>
-          <Text style={styles.subtitle}>
-            {exercises.length} movimentos com curva de força e histórico
-          </Text>
+          <View style={styles.headerTitleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Biblioteca de Exercícios</Text>
+              <Text style={styles.subtitle}>
+                {exercises.length} movimentos com curva de força e histórico
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.createExerciseBtn}
+              onPress={handleOpenCreateExercise}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color={Theme.colors.textInverse} />
+              <Text style={styles.createExerciseBtnText}>Novo</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Busca Textual em Tempo Real */}
@@ -207,6 +264,12 @@ export default function ExercisesScreen() {
                     )}
 
                     <View style={styles.tagsRow}>
+                      {item.isCustom && (
+                        <View style={styles.badgeCustom}>
+                          <Sparkles size={9} color={Theme.colors.primary} />
+                          <Text style={styles.badgeCustomText}>CUSTOM</Text>
+                        </View>
+                      )}
                       <View style={styles.badge}>
                         <Text style={styles.badgeText}>{item.targetMuscle.toUpperCase()}</Text>
                       </View>
@@ -220,16 +283,37 @@ export default function ExercisesScreen() {
                     </View>
                   </View>
 
-                  {/* Adicionar Rápido se houver treino ativo */}
-                  {currentWorkout && (
-                    <TouchableOpacity 
-                      style={styles.quickAddBtn}
-                      onPress={() => handleQuickAdd(item)}
-                      activeOpacity={0.7}
-                    >
-                      <PlusCircle size={22} color={Theme.colors.primary} />
-                    </TouchableOpacity>
-                  )}
+                  {/* Ações Rápidas no Card */}
+                  <View style={styles.cardActionsRight}>
+                    {item.isCustom && (
+                      <View style={styles.customCardActions}>
+                        <TouchableOpacity
+                          style={styles.cardActionBtn}
+                          onPress={() => handleEditExercise(item)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Pencil size={13} color={Theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.cardActionBtn}
+                          onPress={() => handleDeleteExercise(item)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Trash2 size={13} color={Theme.colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {currentWorkout && (
+                      <TouchableOpacity 
+                        style={styles.quickAddBtn}
+                        onPress={() => handleQuickAdd(item)}
+                        activeOpacity={0.7}
+                      >
+                        <PlusCircle size={22} color={Theme.colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {/* Banner de Recorde se já houver registro de sobrecarga */}
@@ -268,6 +352,27 @@ export default function ExercisesScreen() {
           visible={modalVisible}
           onClose={() => setModalVisible(false)}
           exercise={selectedExercise}
+          onEditCustomExercise={(ex) => {
+            setModalVisible(false);
+            handleEditExercise(ex);
+          }}
+          onDeleteCustomExercise={(ex) => {
+            setModalVisible(false);
+            handleDeleteExercise(ex);
+          }}
+        />
+
+        {/* Modal de Criação / Edição de Exercício Customizado */}
+        <CustomExerciseModal
+          visible={customModalVisible}
+          onClose={() => {
+            setCustomModalVisible(false);
+            setExerciseToEdit(null);
+          }}
+          exerciseToEdit={exerciseToEdit}
+          onSave={() => {
+            setRefreshKey(prev => prev + 1);
+          }}
         />
       </View>
     </SafeAreaView>
@@ -286,6 +391,25 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 14,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  createExerciseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  createExerciseBtnText: {
+    color: Theme.colors.textInverse,
+    fontSize: 12,
+    fontWeight: '800',
   },
   title: {
     fontSize: 24,
@@ -408,6 +532,23 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 6,
   },
+  badgeCustom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  badgeCustomText: {
+    color: Theme.colors.text,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
   badge: {
     backgroundColor: Theme.colors.surfaceElevated,
     paddingHorizontal: 6,
@@ -441,6 +582,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Theme.colors.textMuted,
     fontVariant: ['tabular-nums'],
+  },
+  cardActionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  customCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cardActionBtn: {
+    padding: 6,
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
   quickAddBtn: {
     padding: 4,

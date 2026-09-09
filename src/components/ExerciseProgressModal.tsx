@@ -21,7 +21,10 @@ import {
   Activity, 
   Plus, 
   Info,
-  Layers
+  Layers,
+  Pencil,
+  Trash2,
+  Sparkles
 } from 'lucide-react-native';
 import Theme from '../theme/theme';
 import { Exercise } from '../types/workout';
@@ -32,6 +35,8 @@ interface ExerciseProgressModalProps {
   visible: boolean;
   onClose: () => void;
   exercise: Exercise | null;
+  onEditCustomExercise?: (exercise: Exercise) => void;
+  onDeleteCustomExercise?: (exercise: Exercise) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -42,6 +47,8 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
   visible,
   onClose,
   exercise,
+  onEditCustomExercise,
+  onDeleteCustomExercise,
 }) => {
   const { currentWorkout, addExerciseToCurrentWorkout } = useWorkoutStore();
 
@@ -144,6 +151,12 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* Tags e Especificações Biomecânicas */}
             <View style={styles.tagsContainer}>
+              {exercise.isCustom && (
+                <View style={[styles.tag, styles.customTag]}>
+                  <Sparkles size={10} color={Theme.colors.primary} />
+                  <Text style={styles.customTagText}>PERSONALIZADO</Text>
+                </View>
+              )}
               <View style={styles.tag}>
                 <Text style={styles.tagText}>{exercise.targetMuscle.toUpperCase()}</Text>
               </View>
@@ -167,6 +180,37 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
                 </Text>
               </View>
             </View>
+
+            {/* Ações de Gestão do Exercício Customizado */}
+            {exercise.isCustom && (onEditCustomExercise || onDeleteCustomExercise) && (
+              <View style={styles.customManagementRow}>
+                {onEditCustomExercise && (
+                  <TouchableOpacity
+                    style={styles.editCustomBtn}
+                    onPress={() => {
+                      onClose();
+                      onEditCustomExercise(exercise);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Pencil size={13} color={Theme.colors.text} />
+                    <Text style={styles.editCustomBtnText}>Editar Exercício</Text>
+                  </TouchableOpacity>
+                )}
+                {onDeleteCustomExercise && (
+                  <TouchableOpacity
+                    style={styles.deleteCustomBtn}
+                    onPress={() => {
+                      onDeleteCustomExercise(exercise);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Trash2 size={13} color={Theme.colors.danger} />
+                    <Text style={styles.deleteCustomBtnText}>Excluir</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             {/* Sinergistas */}
             {exercise.synergistMuscles.length > 0 && (
@@ -580,5 +624,58 @@ const styles = StyleSheet.create({
     color: Theme.colors.textInverse,
     fontSize: 14,
     fontWeight: '800',
+  },
+  customTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#3F3F46',
+  },
+  customTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.text,
+    letterSpacing: 0.5,
+  },
+  customManagementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  editCustomBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingVertical: 9,
+  },
+  editCustomBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
+  deleteCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  deleteCustomBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.danger,
   },
 });
