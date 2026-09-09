@@ -20,15 +20,32 @@ CREATE INDEX IF NOT EXISTS idx_exercises_target_muscle ON exercises(target_muscl
 CREATE INDEX IF NOT EXISTS idx_exercises_movement_pattern ON exercises(movement_pattern);
 CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name);
 
--- Tabela de Rotinas de Treino (Pré-definidas do Sistema ou Criadas pelo Usuário)
-CREATE TABLE IF NOT EXISTS routines (
+-- Tabela de Fichas/Programas de Treino (Ex: "Ciclo de Força 3x", "Treino de Férias", "PPL")
+CREATE TABLE IF NOT EXISTS workout_programs (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
-  is_system INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_workout_programs_active ON workout_programs(is_active);
+
+-- Tabela de Rotinas/Dias de Treino (Pré-definidas do Sistema ou Criadas pelo Usuário)
+CREATE TABLE IF NOT EXISTS routines (
+  id TEXT PRIMARY KEY,
+  program_id TEXT,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_system INTEGER NOT NULL DEFAULT 0,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (program_id) REFERENCES workout_programs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_routines_program ON routines(program_id);
 
 -- Exercícios Mapeados em Cada Rotina
 CREATE TABLE IF NOT EXISTS routine_exercises (

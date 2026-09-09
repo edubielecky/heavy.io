@@ -113,10 +113,22 @@ export interface RoutineExerciseItem {
 
 export interface Routine {
   id: string;
+  programId?: string;
   name: string;
   description?: string;
   isSystem: boolean;
+  orderIndex?: number;
   exercises: RoutineExerciseItem[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface WorkoutProgram {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  routines: Routine[];
   createdAt: string;
   updatedAt?: string;
 }

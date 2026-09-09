@@ -36,12 +36,13 @@ import {
   Sparkles,
   Activity,
   Download,
-  Upload
+  Upload,
+  Layers
 } from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { useUserStore, UserProfile } from '../../src/store/userStore';
-import { getRoutines } from '../../src/database/database';
-import { Routine } from '../../src/types/workout';
+import { getRoutines, getActiveProgram } from '../../src/database/database';
+import { Routine, WorkoutProgram } from '../../src/types/workout';
 import { auth, signOut } from '../../src/services/firebase';
 import { processSyncQueue } from '../../src/services/syncQueueService';
 import { 
@@ -52,6 +53,7 @@ import {
   HealthConnectStatus 
 } from '../../src/services/healthConnectService';
 import Theme from '../../src/theme/theme';
+import { RoutineManagementModal } from '../../src/components/RoutineManagementModal';
 
 export default function AthleteControlCenterScreen() {
   const router = useRouter();
@@ -65,8 +67,10 @@ export default function AthleteControlCenterScreen() {
   } = useUserStore();
 
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [activeProgram, setActiveProgramState] = useState<WorkoutProgram | null>(null);
   const [isEditMetricsModalOpen, setIsEditMetricsModalOpen] = useState(false);
   const [isResetRoutineModalOpen, setIsResetRoutineModalOpen] = useState(false);
+  const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
@@ -150,6 +154,8 @@ export default function AthleteControlCenterScreen() {
     try {
       const activeRoutines = getRoutines();
       setRoutines(activeRoutines);
+      const activeProg = getActiveProgram();
+      setActiveProgramState(activeProg);
     } catch (e) {
       console.error('Erro ao carregar rotinas:', e);
     }
@@ -361,26 +367,31 @@ export default function AthleteControlCenterScreen() {
 
         <View style={styles.routineCard}>
           <View style={styles.routineHeader}>
-            <View>
-              <Text style={styles.routineTitle}>
-                {routines.length > 0 
-                  ? `${routines.length} Sessões Programadas` 
-                  : 'Nenhuma Ficha Ativa'}
-              </Text>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Text style={styles.routineTitle}>
+                  {activeProgram?.name || (routines.length > 0 ? 'Ficha Ativa' : 'Nenhuma Ficha')}
+                </Text>
+                {activeProgram && (
+                  <View style={styles.activeTagBadge}>
+                    <Text style={styles.activeTagBadgeText}>ATIVA</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.routineSub}>
                 {routines.length > 0 
-                  ? 'Estrutura persistida no SQLite local' 
+                  ? `${routines.length} sessões cadastradas no ciclo` 
                   : 'Configure uma divisão para guiar seus treinos'}
               </Text>
             </View>
 
             <TouchableOpacity 
               style={styles.changeRoutineBtn}
-              onPress={() => setIsResetRoutineModalOpen(true)}
+              onPress={() => setIsRoutineManagerOpen(true)}
               activeOpacity={0.7}
             >
-              <RefreshCw size={13} color={Theme.colors.primary} />
-              <Text style={styles.changeRoutineBtnText}>Trocar Ficha</Text>
+              <Layers size={13} color={Theme.colors.primary} />
+              <Text style={styles.changeRoutineBtnText}>Gerenciar Fichas</Text>
             </TouchableOpacity>
           </View>
 
@@ -733,6 +744,26 @@ export default function AthleteControlCenterScreen() {
             <View style={styles.tracksContainer}>
               <TouchableOpacity 
                 style={styles.trackOption}
+                onPress={() => {
+                  setIsResetRoutineModalOpen(false);
+                  setIsRoutineManagerOpen(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.trackIconWrap}>
+                  <Layers size={18} color={Theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.trackTitle}>Gerenciador de Fichas (Alternar / Criar)</Text>
+                  <Text style={styles.trackDesc}>
+                    Alterne entre fichas salvas (ex: Férias, Ciclo de Força) ou edite exercícios sem reiniciar o onboarding.
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={Theme.colors.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.trackOption}
                 onPress={() => handleSelectReOnboarding('guided')}
                 activeOpacity={0.7}
               >
@@ -776,6 +807,12 @@ export default function AthleteControlCenterScreen() {
         </View>
       </Modal>
 
+      {/* MODAL 3: Gestão Completa de Fichas (CRUD de Fichas e Dias) */}
+      <RoutineManagementModal
+        visible={isRoutineManagerOpen}
+        onClose={() => setIsRoutineManagerOpen(false)}
+        onProgramsUpdated={refreshRoutines}
+      />
     </SafeAreaView>
   );
 }
@@ -967,9 +1004,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   routineTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: Theme.colors.text,
+  },
+  activeTagBadge: {
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  activeTagBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Theme.colors.textInverse,
   },
   routineSub: {
     fontSize: 11,

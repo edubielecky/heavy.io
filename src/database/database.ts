@@ -9,6 +9,7 @@ import {
   ExerciseMechanic,
   PlaneOfMotion,
   Routine, 
+  WorkoutProgram,
   WorkoutSession, 
   PersonalRecord,
   WorkoutExercise,
@@ -97,7 +98,21 @@ export const initDatabase = (): void => {
     });
   }
 
-  // 3. Cria rotinas padrão caso não existam
+  // 3. Migração estrutural: garante colunas program_id e order_index na tabela routines
+  try {
+    const routineCols = db.getAllSync<{ name: string }>('PRAGMA table_info(routines);');
+    const colNames = routineCols.map(c => c.name);
+    if (!colNames.includes('program_id')) {
+      db.execSync('ALTER TABLE routines ADD COLUMN program_id TEXT;');
+    }
+    if (!colNames.includes('order_index')) {
+      db.execSync('ALTER TABLE routines ADD COLUMN order_index INTEGER DEFAULT 0;');
+    }
+  } catch (e) {
+    console.error('Erro ao verificar/migrar colunas de rotinas:', e);
+  }
+
+  // 4. Cria rotinas padrão caso não existam
   const routineCount = db.getFirstSync<{ count: number }>(
     'SELECT COUNT(*) as count FROM routines;'
   );
@@ -105,9 +120,41 @@ export const initDatabase = (): void => {
   if (!routineCount || routineCount.count === 0) {
     seedDefaultRoutines(db);
   }
+
+  // 5. Garante a existência de pelo menos uma ficha/programa ativo
+  try {
+    const progCount = db.getFirstSync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM workout_programs;'
+    );
+    if (!progCount || progCount.count === 0) {
+      const defaultProgId = 'prog_main_default';
+      const now = new Date().toISOString();
+      db.runSync(
+        `INSERT OR REPLACE INTO workout_programs (id, name, description, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, 1, ?, ?);`,
+        [defaultProgId, 'Ficha Principal', 'Divisão ativa de treinamento', now, now]
+      );
+      db.runSync(
+        'UPDATE routines SET program_id = ? WHERE program_id IS NULL;',
+        [defaultProgId]
+      );
+    }
+  } catch (e) {
+    console.error('Erro ao inicializar programa de treino padrão:', e);
+  }
 };
 
 const seedDefaultRoutines = (db: SQLite.SQLiteDatabase) => {
+  const defaultProgId = 'prog_main_default';
+  const now = new Date().toISOString();
+
+  // Cria a ficha padrão de referência
+  db.runSync(
+    `INSERT OR REPLACE INTO workout_programs (id, name, description, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, ?, ?);`,
+    [defaultProgId, 'Ficha PPL Clássica', 'Periodização de força e hipertrofia Push / Pull / Legs', now, now]
+  );
+
   const routinesData = [
     {
       id: 'routine_push_a',
@@ -150,10 +197,10 @@ const seedDefaultRoutines = (db: SQLite.SQLiteDatabase) => {
   ];
 
   db.withTransactionSync(() => {
-    for (const r of routinesData) {
+    routinesData.forEach((r, rIdx) => {
       db.runSync(
-        'INSERT OR REPLACE INTO routines (id, name, description, is_system) VALUES (?, ?, ?, 1);',
-        [r.id, r.name, r.description]
+        'INSERT OR REPLACE INTO routines (id, program_id, name, description, is_system, order_index) VALUES (?, ?, ?, ?, 1, ?);',
+        [r.id, defaultProgId, r.name, r.description, rIdx]
       );
 
       r.exercises.forEach((ex, idx) => {
@@ -173,7 +220,7 @@ const seedDefaultRoutines = (db: SQLite.SQLiteDatabase) => {
           ]
         );
       });
-    }
+    });
   });
 };
 
@@ -398,13 +445,255 @@ export const deleteCustomExercise = (exerciseId: string): boolean => {
 };
 
 /**
- * CONSULTAS DE ROTINAS
+ * CONSULTAS E OPERAÇÕES DE PROGRAMAS / FICHAS DE TREINO
+ */
+export const getPrograms = (): WorkoutProgram[] => {
+  const db = getDatabase();
+  const programRows = db.getAllSync<any>(
+    'SELECT * FROM workout_programs ORDER BY is_active DESC, created_at DESC;'
+  );
+
+  return programRows.map(p => {
+    const routinesRows = db.getAllSync<any>(
+      'SELECT * FROM routines WHERE program_id = ? ORDER BY order_index ASC, name ASC;',
+      [p.id]
+    );
+
+    const routines: Routine[] = routinesRows.map(r => {
+      const exRows = db.getAllSync<any>(
+        `SELECT re.*, e.name as exercise_name, e.target_muscle 
+         FROM routine_exercises re
+         JOIN exercises e ON re.exercise_id = e.id
+         WHERE re.routine_id = ?
+         ORDER BY re.order_index ASC;`,
+        [r.id]
+      );
+
+      return {
+        id: r.id,
+        programId: r.program_id || undefined,
+        name: r.name,
+        description: r.description || undefined,
+        isSystem: r.is_system === 1,
+        orderIndex: r.order_index || 0,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        exercises: exRows.map(e => ({
+          id: e.id,
+          exerciseId: e.exercise_id,
+          exerciseName: e.exercise_name,
+          targetMuscle: e.target_muscle as MuscleGroup,
+          orderIndex: e.order_index,
+          targetSets: e.target_sets,
+          targetRepsMin: e.target_reps_min,
+          targetRepsMax: e.target_reps_max,
+          restSeconds: e.rest_seconds,
+          notes: e.notes || undefined,
+        })),
+      };
+    });
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description || undefined,
+      isActive: p.is_active === 1,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+      routines,
+    };
+  });
+};
+
+export const getActiveProgram = (): WorkoutProgram | null => {
+  const programs = getPrograms();
+  const active = programs.find(p => p.isActive);
+  if (active) return active;
+  if (programs.length > 0) {
+    setActiveProgram(programs[0].id);
+    return { ...programs[0], isActive: true };
+  }
+  return null;
+};
+
+export const setActiveProgram = (programId: string): void => {
+  const db = getDatabase();
+  db.withTransactionSync(() => {
+    db.runSync('UPDATE workout_programs SET is_active = 0;');
+    db.runSync('UPDATE workout_programs SET is_active = 1 WHERE id = ?;', [programId]);
+  });
+};
+
+export const createProgram = (
+  name: string,
+  description?: string,
+  days?: Array<{ name: string; description?: string; exercises?: any[] }>
+): WorkoutProgram => {
+  const db = getDatabase();
+  const programId = `prog_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = new Date().toISOString();
+
+  // Se for o primeiro programa, marca como ativo
+  const countRow = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM workout_programs;');
+  const isActive = (!countRow || countRow.count === 0) ? 1 : 0;
+
+  db.withTransactionSync(() => {
+    db.runSync(
+      `INSERT INTO workout_programs (id, name, description, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?);`,
+      [programId, name, description || null, isActive, now, now]
+    );
+
+    if (days && days.length > 0) {
+      days.forEach((day, dIdx) => {
+        const routineId = `routine_${programId}_${dIdx}_${Date.now()}`;
+        db.runSync(
+          `INSERT INTO routines (id, program_id, name, description, is_system, order_index, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 0, ?, ?, ?);`,
+          [routineId, programId, day.name, day.description || null, dIdx, now, now]
+        );
+
+        if (day.exercises && day.exercises.length > 0) {
+          day.exercises.forEach((ex, eIdx) => {
+            const exId = `re_${routineId}_${eIdx}_${Date.now()}`;
+            db.runSync(
+              `INSERT INTO routine_exercises (
+                id, routine_id, exercise_id, order_index, target_sets, target_reps_min, target_reps_max, rest_seconds, notes
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+              [
+                exId,
+                routineId,
+                ex.exerciseId,
+                eIdx,
+                ex.targetSets || 3,
+                ex.targetRepsMin || 8,
+                ex.targetRepsMax || 12,
+                ex.restSeconds || 90,
+                ex.notes || null,
+              ]
+            );
+          });
+        }
+      });
+    }
+  });
+
+  const all = getPrograms();
+  return all.find(p => p.id === programId)!;
+};
+
+export const updateProgram = (
+  programId: string,
+  updates: { name?: string; description?: string }
+): WorkoutProgram | null => {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.runSync(
+    `UPDATE workout_programs 
+     SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ?
+     WHERE id = ?;`,
+    [updates.name ?? null, updates.description ?? null, now, programId]
+  );
+
+  const all = getPrograms();
+  return all.find(p => p.id === programId) || null;
+};
+
+export const deleteProgram = (programId: string): boolean => {
+  const db = getDatabase();
+  const all = getPrograms();
+  if (all.length <= 1) return false; // Impede exclusão se só resta 1 ficha
+
+  const target = all.find(p => p.id === programId);
+  if (!target) return false;
+
+  db.withTransactionSync(() => {
+    // Se a ficha excluída era a ativa, ativa outra
+    if (target.isActive) {
+      const nextActive = all.find(p => p.id !== programId);
+      if (nextActive) {
+        db.runSync('UPDATE workout_programs SET is_active = 1 WHERE id = ?;', [nextActive.id]);
+      }
+    }
+
+    // Exclui rotinas associadas e seus exercícios
+    const routinesRows = db.getAllSync<{ id: string }>('SELECT id FROM routines WHERE program_id = ?;', [programId]);
+    for (const r of routinesRows) {
+      db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [r.id]);
+    }
+    db.runSync('DELETE FROM routines WHERE program_id = ?;', [programId]);
+    db.runSync('DELETE FROM workout_programs WHERE id = ?;', [programId]);
+  });
+
+  return true;
+};
+
+export const addDayToProgram = (
+  programId: string,
+  dayName: string,
+  description?: string
+): Routine => {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const countRow = db.getFirstSync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM routines WHERE program_id = ?;',
+    [programId]
+  );
+  const nextOrder = countRow ? countRow.count : 0;
+  const routineId = `routine_${programId}_${nextOrder}_${Date.now()}`;
+
+  db.runSync(
+    `INSERT INTO routines (id, program_id, name, description, is_system, order_index, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?);`,
+    [routineId, programId, dayName, description || null, nextOrder, now, now]
+  );
+
+  return {
+    id: routineId,
+    programId,
+    name: dayName,
+    description: description || undefined,
+    isSystem: false,
+    orderIndex: nextOrder,
+    exercises: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
+export const deleteDayFromProgram = (routineId: string): void => {
+  const db = getDatabase();
+  db.withTransactionSync(() => {
+    db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [routineId]);
+    db.runSync('DELETE FROM routines WHERE id = ?;', [routineId]);
+  });
+};
+
+/**
+ * CONSULTAS DE ROTINAS (DIAS DE TREINO)
  */
 export const getRoutines = (): Routine[] => {
   const db = getDatabase();
-  const routinesRows = db.getAllSync<any>(
-    'SELECT * FROM routines ORDER BY is_system DESC, name ASC;'
+  
+  // Tenta buscar rotinas da ficha ativa
+  const activeProg = db.getFirstSync<{ id: string }>(
+    'SELECT id FROM workout_programs WHERE is_active = 1 LIMIT 1;'
   );
+
+  let routinesRows: any[] = [];
+  if (activeProg) {
+    routinesRows = db.getAllSync<any>(
+      'SELECT * FROM routines WHERE program_id = ? ORDER BY order_index ASC, name ASC;',
+      [activeProg.id]
+    );
+  }
+
+  // Fallback: se não houver programa ativo ou não houver rotinas vinculadas, retorna todas
+  if (routinesRows.length === 0) {
+    routinesRows = db.getAllSync<any>(
+      'SELECT * FROM routines ORDER BY is_system DESC, order_index ASC, name ASC;'
+    );
+  }
 
   return routinesRows.map(r => {
     const exRows = db.getAllSync<any>(
@@ -418,9 +707,11 @@ export const getRoutines = (): Routine[] => {
 
     return {
       id: r.id,
+      programId: r.program_id || undefined,
       name: r.name,
       description: r.description || undefined,
       isSystem: r.is_system === 1,
+      orderIndex: r.order_index || 0,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       exercises: exRows.map(e => ({
@@ -440,22 +731,39 @@ export const getRoutines = (): Routine[] => {
 };
 
 export const saveRoutine = (
-  routine: Omit<Routine, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }
+  routine: Omit<Routine, 'createdAt' | 'updatedAt'> & { 
+    createdAt?: string; 
+    updatedAt?: string;
+    programId?: string;
+    orderIndex?: number;
+  }
 ): Routine => {
   const db = getDatabase();
   const now = new Date().toISOString();
   const createdAt = routine.createdAt || now;
   const updatedAt = now;
 
+  // Garante programId se não especificado
+  let programId = routine.programId;
+  if (!programId) {
+    const activeProg = db.getFirstSync<{ id: string }>(
+      'SELECT id FROM workout_programs WHERE is_active = 1 LIMIT 1;'
+    );
+    programId = activeProg ? activeProg.id : undefined;
+  }
+
   db.withTransactionSync(() => {
     db.runSync(
-      `INSERT OR REPLACE INTO routines (id, name, description, is_system, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?);`,
+      `INSERT OR REPLACE INTO routines (
+        id, program_id, name, description, is_system, order_index, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         routine.id,
+        programId || null,
         routine.name,
         routine.description || null,
         routine.isSystem ? 1 : 0,
+        routine.orderIndex ?? 0,
         createdAt,
         updatedAt,
       ]
@@ -487,6 +795,8 @@ export const saveRoutine = (
 
   return {
     ...routine,
+    programId,
+    orderIndex: routine.orderIndex ?? 0,
     isSystem: routine.isSystem ?? false,
     createdAt,
     updatedAt,

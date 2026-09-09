@@ -29,8 +29,9 @@ import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
 import { AddExerciseModal } from '../../src/components/AddExerciseModal';
 import { RestTimerBar } from '../../src/components/RestTimerBar';
 import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
-import { getExerciseById, getRoutines, getSessionPRs } from '../../src/database/database';
-import { Routine, WorkoutSession, PersonalRecord } from '../../src/types/workout';
+import { RoutineManagementModal } from '../../src/components/RoutineManagementModal';
+import { getExerciseById, getRoutines, getActiveProgram, getSessionPRs } from '../../src/database/database';
+import { Routine, WorkoutSession, PersonalRecord, WorkoutProgram } from '../../src/types/workout';
 import Theme from '../../src/theme/theme';
 
 export default function WorkoutScreen() {
@@ -52,23 +53,31 @@ export default function WorkoutScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [activeProgram, setActiveProgramState] = useState<WorkoutProgram | null>(null);
+  const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
 
   // Estado do Modal de Conclusão de Treino (Workout Summary Modal)
   const [summarySession, setSummarySession] = useState<WorkoutSession | null>(null);
   const [summaryPRs, setSummaryPRs] = useState<PersonalRecord[]>([]);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
+  const loadRoutinesAndProgram = useCallback(() => {
+    try {
+      const loadedRoutines = getRoutines();
+      setRoutines(loadedRoutines);
+      const activeProg = getActiveProgram();
+      setActiveProgramState(activeProg);
+    } catch (err) {
+      console.error('Erro ao carregar rotinas no dashboard:', err);
+    }
+  }, []);
+
   // Recarrega dados do SQLite sempre que a aba ganha foco
   useFocusEffect(
     useCallback(() => {
       loadFromDatabase();
-      try {
-        const loadedRoutines = getRoutines();
-        setRoutines(loadedRoutines);
-      } catch (err) {
-        console.error('Erro ao carregar rotinas no dashboard:', err);
-      }
-    }, [loadFromDatabase])
+      loadRoutinesAndProgram();
+    }, [loadFromDatabase, loadRoutinesAndProgram])
   );
 
   // Timer de duração do treino ativo
@@ -274,6 +283,18 @@ export default function WorkoutScreen() {
                     <Calendar size={11} color={Theme.colors.textInverse} />
                     <Text style={styles.heroBadgeActiveText}>TREINO PROGRAMADO</Text>
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.programChipBtn}
+                    onPress={() => setIsRoutineManagerOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Layers size={10} color={Theme.colors.primary} />
+                    <Text style={styles.programChipText} numberOfLines={1}>
+                      {activeProgram?.name || 'Ficha Ativa'}
+                    </Text>
+                  </TouchableOpacity>
+
                   <Text style={styles.heroBadgeCount}>
                     {routineOfTheDay.exercises.length} EXERCÍCIOS
                   </Text>
@@ -322,8 +343,18 @@ export default function WorkoutScreen() {
           {otherRoutines.length > 0 && (
             <View style={styles.otherSection}>
               <View style={styles.sectionHeader}>
-                <Layers size={15} color={Theme.colors.textSecondary} />
-                <Text style={styles.sectionTitle}>Outras Sessões da Sua Grade</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Layers size={15} color={Theme.colors.textSecondary} />
+                  <Text style={styles.sectionTitle}>Outras Sessões da Grade</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.manageRoutinesHeaderBtn}
+                  onPress={() => setIsRoutineManagerOpen(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.manageRoutinesHeaderBtnText}>Trocar Ficha</Text>
+                </TouchableOpacity>
               </View>
 
               {otherRoutines.map(routine => (
@@ -371,6 +402,13 @@ export default function WorkoutScreen() {
           session={summarySession}
           prs={summaryPRs}
           onClose={handleCloseSummary}
+        />
+
+        {/* Modal de Gestão de Fichas e Rotinas */}
+        <RoutineManagementModal
+          visible={isRoutineManagerOpen}
+          onClose={() => setIsRoutineManagerOpen(false)}
+          onProgramsUpdated={loadRoutinesAndProgram}
         />
       </SafeAreaView>
     );
@@ -593,6 +631,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
+  },
+  programChipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    maxWidth: 130,
+  },
+  programChipText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.primary,
+  },
+  manageRoutinesHeaderBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  manageRoutinesHeaderBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
   },
   heroBadgeActiveText: {
     color: Theme.colors.textInverse,
