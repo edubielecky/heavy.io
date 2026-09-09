@@ -5,13 +5,17 @@ import {
   StyleSheet, 
   ScrollView, 
   TextInput, 
-  SafeAreaView 
+  SafeAreaView,
+  TouchableOpacity
 } from 'react-native';
-import { Trophy, Calculator, Dumbbell, Flame, Zap } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Trophy, Calculator, Dumbbell, Flame, Zap, User, LogOut } from 'lucide-react-native';
 import { useWorkoutStore, calculateEstimated1RM } from '../../src/store/workoutStore';
+import { auth, signOut } from '../../src/services/firebase';
 import Theme from '../../src/theme/theme';
 
 export default function ProfileStatsScreen() {
+  const router = useRouter();
   const { workoutHistory, personalRecords, loadFromDatabase } = useWorkoutStore();
 
   useEffect(() => {
@@ -154,6 +158,36 @@ export default function ProfileStatsScreen() {
             </Text>
           </View>
         )}
+
+        {/* Seção de Conta & Sessão */}
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <User size={18} color={Theme.colors.primary} />
+          <Text style={styles.sectionTitle}>Sessão & Conta</Text>
+        </View>
+
+        <View style={styles.accountCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.accountEmail}>
+              {auth.currentUser?.email || 'Atleta Convidado (Modo Offline)'}
+            </Text>
+            <Text style={styles.accountSub}>
+              {auth.currentUser ? 'Sincronizado com Firebase heavy-io' : 'Dados persistidos localmente no SQLite'}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={async () => {
+              try {
+                await signOut(auth);
+              } catch {}
+              router.replace('/');
+            }}
+            activeOpacity={0.7}
+          >
+            <LogOut size={16} color={Theme.colors.danger} />
+            <Text style={styles.logoutBtnText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -369,5 +403,42 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  accountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.borderRadius.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: 40,
+    gap: 12,
+  },
+  accountEmail: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
+  accountSub: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    marginTop: 2,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    gap: 6,
+  },
+  logoutBtnText: {
+    color: Theme.colors.danger,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
