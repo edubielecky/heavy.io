@@ -1,34 +1,40 @@
 export const Theme = {
   colors: {
-    background: '#0B0C10',
-    surface: '#14161F',
-    surfaceElevated: '#1D212C',
-    surfaceCard: '#181A24',
-    border: '#262A38',
-    borderLight: '#32374A',
+    // Fundos (Preto profundo e Zinco escuro)
+    background: '#09090B',
+    surface: '#121215',
+    surfaceElevated: '#18181B',
+    surfaceCard: '#141417',
     
-    // Brand & Action Accents
-    primary: '#CCFF00', // Electric Volt / Lime Neon
-    primaryDark: '#A6CF00',
-    primaryMuted: 'rgba(204, 255, 0, 0.12)',
+    // Bordas estruturais sutis
+    border: '#27272A',
+    borderLight: '#3F3F46',
     
-    accentFlame: '#FF5E3A', // Fire Orange
-    accentFlameMuted: 'rgba(255, 94, 58, 0.15)',
+    // Ação Primária: Branco / Titânio de alto contraste
+    primary: '#FFFFFF',
+    primaryDark: '#E4E4E7',
+    primaryMuted: 'rgba(255, 255, 255, 0.08)',
     
-    accentCyan: '#38BDF8', // Cyan for technical info / timers
-    accentCyanMuted: 'rgba(56, 189, 248, 0.15)',
+    // Acentos Funcionais e Contidos (sem neons/glows)
+    accentTitanium: '#D4D4D8',
+    accentTitaniumMuted: 'rgba(212, 212, 216, 0.10)',
+
+    accentFlame: '#F43F5E', // Destaque sóbrio
+    accentFlameMuted: 'rgba(244, 63, 94, 0.12)',
 
     accentPurple: '#A855F7',
     
-    success: '#22C55E',
+    // Status
+    success: '#10B981', // Verde esmeralda técnico
+    successMuted: 'rgba(16, 185, 129, 0.12)',
     warning: '#F59E0B',
     danger: '#EF4444',
     
-    // Typography
+    // Tipografia
     text: '#FFFFFF',
-    textSecondary: '#94A3B8',
-    textMuted: '#64748B',
-    textInverse: '#0B0C10',
+    textSecondary: '#A1A1AA',
+    textMuted: '#71717A',
+    textInverse: '#09090B',
   },
   spacing: {
     xs: 4,
@@ -42,8 +48,8 @@ export const Theme = {
   borderRadius: {
     sm: 6,
     md: 10,
-    lg: 16,
-    xl: 20,
+    lg: 14,
+    xl: 18,
     full: 9999,
   },
 };

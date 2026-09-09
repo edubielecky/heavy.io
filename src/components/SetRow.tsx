@@ -126,8 +126,8 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.border,
   },
   rowCompleted: {
-    backgroundColor: 'rgba(204, 255, 0, 0.04)',
-    borderColor: 'rgba(204, 255, 0, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: Theme.colors.borderLight,
   },
   badge: {
     width: 30,
