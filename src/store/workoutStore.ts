@@ -9,7 +9,8 @@ import {
   WorkoutSet, 
   PersonalRecord, 
   SetType, 
-  RestTimerState 
+  RestTimerState,
+  Routine 
 } from '../types/workout';
 import { 
   saveWorkoutSession, 
@@ -21,7 +22,8 @@ import {
   deleteWorkoutSession,
   logSet,
   completeWorkout,
-  getExerciseById
+  getExerciseById,
+  getLastExercisePerformance
 } from '../database/database';
 
 // Fórmula de Epley para estimativa de 1RM: Peso * (1 + Reps / 30)
@@ -47,6 +49,7 @@ interface WorkoutStoreState {
 
   // Ações de Treino
   startWorkout: (name?: string) => void;
+  startWorkoutFromRoutine: (routine: Routine) => void;
   cancelWorkout: () => void;
   finishWorkout: () => void;
   
@@ -127,6 +130,74 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         set({ 
           currentWorkout: newSession,
           focusedExerciseId: null,
+        });
+      },
+
+      startWorkoutFromRoutine: (routine: Routine) => {
+        const newSessionId = `workout_${Date.now()}`;
+
+        const exercises: WorkoutExercise[] = routine.exercises.map((re, exIdx) => {
+          const workoutExerciseId = `we_${Date.now()}_${exIdx}_${Math.random().toString(36).substr(2, 5)}`;
+
+          // 1. Busca dados da última vez que o exercício foi executado (cargas e repetições "fantasma")
+          let lastPerf: any = null;
+          try {
+            lastPerf = getLastExercisePerformance(re.exerciseId);
+          } catch (e) {
+            console.error('Erro ao buscar histórico do exercício:', e);
+          }
+
+          const numSets = Math.max(1, re.targetSets || lastPerf?.sets?.length || 3);
+          const sets: WorkoutSet[] = [];
+
+          for (let sIdx = 1; sIdx <= numSets; sIdx++) {
+            const ghostSet = lastPerf?.sets?.[sIdx - 1];
+            const initialWeight = ghostSet ? ghostSet.weightKg : (lastPerf?.bestWeightKg || 0);
+            const initialReps = ghostSet ? ghostSet.reps : (re.targetRepsMin || 10);
+
+            sets.push({
+              id: `set_${Date.now()}_${exIdx}_${sIdx}`,
+              setNumber: sIdx,
+              type: (ghostSet?.type as SetType) || 'normal',
+              weightKg: initialWeight,
+              reps: initialReps,
+              rpe: ghostSet?.rpe,
+              rir: ghostSet?.rir,
+              completed: false,
+            });
+          }
+
+          return {
+            id: workoutExerciseId,
+            exerciseId: re.exerciseId,
+            exerciseName: re.exerciseName,
+            targetMuscle: re.targetMuscle,
+            sets,
+          };
+        });
+
+        const newSession: WorkoutSession = {
+          id: newSessionId,
+          routineId: routine.id,
+          name: routine.name,
+          startTime: new Date().toISOString(),
+          durationSeconds: 0,
+          exercises,
+          totalTonnageKg: 0,
+          totalSets: 0,
+          isCompleted: false,
+        };
+
+        try {
+          saveWorkoutSession(newSession);
+        } catch (err) {
+          console.error('Erro ao salvar sessão ativa da rotina no SQLite:', err);
+        }
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+        set({
+          currentWorkout: newSession,
+          focusedExerciseId: exercises[0]?.id || null,
         });
       },
 
