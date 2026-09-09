@@ -60,7 +60,7 @@ interface WorkoutStoreState {
   startWorkout: (name?: string) => void;
   startWorkoutFromRoutine: (routine: Routine) => void;
   cancelWorkout: () => void;
-  finishWorkout: () => void;
+  finishWorkout: () => WorkoutSession | null;
   
   // Ações de Exercício
   addExerciseToCurrentWorkout: (exercise: Exercise) => void;
@@ -229,9 +229,9 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         });
       },
 
-      finishWorkout: () => {
+      finishWorkout: (): WorkoutSession | null => {
         const { currentWorkout } = get();
-        if (!currentWorkout) return;
+        if (!currentWorkout) return null;
 
         try {
           // Fecha o treino diretamente no banco calculando tonelagem e tempo
@@ -257,8 +257,11 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
             personalRecords: prs,
             restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
           });
+
+          return completed;
         } catch (err) {
           console.error('Erro ao finalizar treino no SQLite:', err);
+          return null;
         }
       },
 

@@ -28,8 +28,9 @@ import { useWorkoutStore } from '../../src/store/workoutStore';
 import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
 import { AddExerciseModal } from '../../src/components/AddExerciseModal';
 import { RestTimerBar } from '../../src/components/RestTimerBar';
-import { getExerciseById, getRoutines } from '../../src/database/database';
-import { Routine } from '../../src/types/workout';
+import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
+import { getExerciseById, getRoutines, getSessionPRs } from '../../src/database/database';
+import { Routine, WorkoutSession, PersonalRecord } from '../../src/types/workout';
 import Theme from '../../src/theme/theme';
 
 export default function WorkoutScreen() {
@@ -48,6 +49,11 @@ export default function WorkoutScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [routines, setRoutines] = useState<Routine[]>([]);
+
+  // Estado do Modal de Conclusão de Treino (Workout Summary Modal)
+  const [summarySession, setSummarySession] = useState<WorkoutSession | null>(null);
+  const [summaryPRs, setSummaryPRs] = useState<PersonalRecord[]>([]);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // Recarrega dados do SQLite sempre que a aba ganha foco
   useFocusEffect(
@@ -107,8 +113,29 @@ export default function WorkoutScreen() {
       Alert.alert('Treino Vazio', 'Adicione pelo menos um exercício antes de finalizar.');
       return;
     }
-    finishWorkout();
-    Alert.alert('Treino Concluído!', 'Excelente sessão de força registrada com sucesso no diário.');
+
+    const sessionToFinish = currentWorkout;
+    const completed = finishWorkout();
+    const finalSession = completed || sessionToFinish;
+
+    // Busca recordes pessoais conquistados na sessão
+    let prs: PersonalRecord[] = [];
+    try {
+      prs = getSessionPRs(finalSession.id);
+    } catch (e) {
+      console.error('Erro ao buscar PRs da sessão:', e);
+    }
+
+    setSummarySession(finalSession);
+    setSummaryPRs(prs);
+    setIsSummaryModalOpen(true);
+  };
+
+  const handleCloseSummary = () => {
+    setIsSummaryModalOpen(false);
+    setSummarySession(null);
+    setSummaryPRs([]);
+    loadFromDatabase();
   };
 
   // 1. DETECÇÃO DO TREINO DO DIA (Lógica cíclica baseada no histórico)
@@ -283,6 +310,14 @@ export default function WorkoutScreen() {
             <Text style={styles.blankStartText}>Iniciar Treino Livre / Avulso</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Modal de Conclusão de Treino */}
+        <WorkoutSummaryModal
+          visible={isSummaryModalOpen}
+          session={summarySession}
+          prs={summaryPRs}
+          onClose={handleCloseSummary}
+        />
       </SafeAreaView>
     );
   }
@@ -381,6 +416,14 @@ export default function WorkoutScreen() {
 
         {/* Dock do Cronômetro de Descanso (Renderizado na base da tela) */}
         <RestTimerBar />
+
+        {/* Modal de Conclusão de Treino */}
+        <WorkoutSummaryModal
+          visible={isSummaryModalOpen}
+          session={summarySession}
+          prs={summaryPRs}
+          onClose={handleCloseSummary}
+        />
       </View>
     </SafeAreaView>
   );
