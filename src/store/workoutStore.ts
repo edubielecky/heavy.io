@@ -23,7 +23,10 @@ import {
   logSet,
   completeWorkout,
   getExerciseById,
-  getLastExercisePerformance
+  getLastExercisePerformance,
+  saveActiveSessionDraft,
+  getActiveSessionDraft,
+  clearActiveSessionDraft
 } from '../database/database';
 import {
   scheduleRestTimerNotification,
@@ -49,6 +52,7 @@ interface WorkoutStoreState {
   personalRecords: Record<string, PersonalRecord>;
   restTimer: RestTimerState;
   focusedExerciseId: string | null;
+  isSessionActiveInForeground: boolean;
 
   // Carregamento inicial do SQLite
   loadFromDatabase: () => void;
@@ -59,6 +63,8 @@ interface WorkoutStoreState {
   // Ações de Treino
   startWorkout: (name?: string) => void;
   startWorkoutFromRoutine: (routine: Routine) => void;
+  resumeActiveSession: () => void;
+  discardActiveSession: () => void;
   cancelWorkout: () => void;
   finishWorkout: () => WorkoutSession | null;
   
@@ -86,6 +92,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
       workoutHistory: [],
       personalRecords: {},
       focusedExerciseId: null,
+      isSessionActiveInForeground: false,
       restTimer: {
         targetEndTime: null,
         remainingSeconds: 0,
@@ -98,11 +105,37 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         set({ focusedExerciseId: id });
       },
 
+      resumeActiveSession: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        set({ isSessionActiveInForeground: true });
+      },
+
+      discardActiveSession: () => {
+        const { currentWorkout } = get();
+        if (currentWorkout) {
+          try {
+            deleteWorkoutSession(currentWorkout.id);
+          } catch (err) {
+            console.error('Erro ao deletar sessão ativa do SQLite:', err);
+          }
+        }
+        clearActiveSessionDraft();
+        cancelRestTimerNotification();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        set({
+          currentWorkout: null,
+          focusedExerciseId: null,
+          isSessionActiveInForeground: false,
+          restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
+        });
+      },
+
       loadFromDatabase: () => {
         try {
           const history = getWorkoutHistory();
           const prs = getPersonalRecords();
-          const activeSession = getActiveWorkoutSession();
+          const activeDraft = getActiveSessionDraft();
+          const activeSession = activeDraft || getActiveWorkoutSession();
 
           set({
             workoutHistory: history,
@@ -110,6 +143,8 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
             // Restaura sessão ativa se existir e não houver treino em memória
             currentWorkout: get().currentWorkout || activeSession || null,
             focusedExerciseId: get().focusedExerciseId || (activeSession?.exercises[0]?.id ?? null),
+            // Ao hidratar após crash ou restart, mantém recolhido para exibir banner de recuperação
+            isSessionActiveInForeground: false,
           });
         } catch (e) {
           console.error('Failed to load data from SQLite:', e);
@@ -128,9 +163,10 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           isCompleted: false,
         };
 
-        // Salva rascunho ativo imediatamente no SQLite
+        // Salva rascunho ativo imediatamente no SQLite e na tabela de crash recovery
         try {
           saveWorkoutSession(newSession);
+          saveActiveSessionDraft(newSession);
         } catch (err) {
           console.error('Erro ao salvar rascunho de sessão ativa no SQLite:', err);
         }
@@ -139,6 +175,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         set({ 
           currentWorkout: newSession,
           focusedExerciseId: null,
+          isSessionActiveInForeground: true,
         });
       },
 
@@ -199,6 +236,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
         try {
           saveWorkoutSession(newSession);
+          saveActiveSessionDraft(newSession);
         } catch (err) {
           console.error('Erro ao salvar sessão ativa da rotina no SQLite:', err);
         }
@@ -207,6 +245,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         set({
           currentWorkout: newSession,
           focusedExerciseId: exercises[0]?.id || null,
+          isSessionActiveInForeground: true,
         });
       },
 
@@ -220,11 +259,13 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           }
         }
 
+        clearActiveSessionDraft();
         cancelRestTimerNotification();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         set({ 
           currentWorkout: null,
           focusedExerciseId: null,
+          isSessionActiveInForeground: false,
           restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false }
         });
       },
@@ -240,6 +281,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           const prs = getPersonalRecords();
 
           cancelRestTimerNotification();
+          clearActiveSessionDraft();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
           // Dispara sincronização em nuvem se houver conexão ativa
@@ -253,6 +295,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           set({
             currentWorkout: null,
             focusedExerciseId: null,
+            isSessionActiveInForeground: false,
             workoutHistory: history,
             personalRecords: prs,
             restTimer: { targetEndTime: null, remainingSeconds: 0, totalSeconds: 0, exerciseName: '', isRunning: false },
@@ -294,9 +337,10 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           exercises: [...currentWorkout.exercises, newWorkoutExercise],
         };
 
-        // Salva atualização no SQLite para persistência total
+        // Salva atualização no SQLite para persistência total e crash recovery
         try {
           saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
         } catch (err) {
           console.error('Erro ao salvar exercício no SQLite:', err);
         }
@@ -321,6 +365,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
 
         try {
           saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
         } catch (err) {
           console.error('Erro ao remover exercício no SQLite:', err);
         }
@@ -356,6 +401,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         const updatedSession = { ...currentWorkout, exercises: updatedExercises };
         try {
           saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
         } catch (err) {
           console.error('Erro ao adicionar set no SQLite:', err);
         }
@@ -381,6 +427,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         const updatedSession = { ...currentWorkout, exercises: updatedExercises };
         try {
           saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
         } catch (err) {
           console.error('Erro ao remover set no SQLite:', err);
         }
@@ -422,6 +469,8 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
               completed: (targetSet as WorkoutSet).completed,
             });
           }
+          saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
         } catch (err) {
           console.error('Erro ao salvar atualização do set no SQLite:', err);
         }
@@ -485,8 +534,15 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           }
         }
 
-        // 2. ATUALIZAÇÃO DO ESTADO DA SESSÃO E FOCO
+        // 2. ATUALIZAÇÃO DO ESTADO DA SESSÃO, PERSISTÊNCIA DE RASCUNHO E FOCO
         const updatedSession = { ...currentWorkout, exercises: updatedExercises };
+        try {
+          saveWorkoutSession(updatedSession);
+          saveActiveSessionDraft(updatedSession);
+        } catch (err) {
+          console.error('Erro ao atualizar sessão e rascunho de crash recovery:', err);
+        }
+
         set({ 
           currentWorkout: updatedSession,
           focusedExerciseId: workoutExerciseId,

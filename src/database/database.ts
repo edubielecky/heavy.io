@@ -896,6 +896,9 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
     }
   }
 
+  // Limpa o rascunho temporário de recuperação
+  clearActiveSessionDraft();
+
   return completedSession;
 };
 
@@ -927,6 +930,47 @@ export const deleteWorkoutSession = (sessionId: string): void => {
     db.runSync('DELETE FROM workout_session_exercises WHERE session_id = ?;', [sessionId]);
     db.runSync('DELETE FROM workout_sessions WHERE id = ?;', [sessionId]);
   });
+  clearActiveSessionDraft();
+};
+
+/**
+ * 7. RESILIÊNCIA E CRASH RECOVERY: Gravação e Recuperação de Rascunho Ativo (active_session_draft)
+ */
+export const saveActiveSessionDraft = (session: WorkoutSession): void => {
+  const db = getDatabase();
+  try {
+    const serialized = JSON.stringify(session);
+    db.runSync(
+      `INSERT OR REPLACE INTO active_session_draft (id, session_id, state_json, updated_at)
+       VALUES ('current_active_draft', ?, ?, datetime('now'));`,
+      [session.id, serialized]
+    );
+  } catch (e) {
+    console.warn('Erro ao salvar rascunho de sessão ativa:', e);
+  }
+};
+
+export const getActiveSessionDraft = (): WorkoutSession | null => {
+  const db = getDatabase();
+  try {
+    const row = db.getFirstSync<{ state_json: string }>(
+      `SELECT state_json FROM active_session_draft WHERE id = 'current_active_draft';`
+    );
+    if (!row?.state_json) return null;
+    return JSON.parse(row.state_json) as WorkoutSession;
+  } catch (e) {
+    console.warn('Erro ao recuperar rascunho de sessão ativa:', e);
+    return null;
+  }
+};
+
+export const clearActiveSessionDraft = (): void => {
+  const db = getDatabase();
+  try {
+    db.runSync(`DELETE FROM active_session_draft WHERE id = 'current_active_draft';`);
+  } catch (e) {
+    console.warn('Erro ao limpar rascunho de sessão ativa:', e);
+  }
 };
 
 /**

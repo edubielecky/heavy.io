@@ -120,4 +120,12 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, created_at ASC);
+
+-- Tabela de Resiliência de Sessão Ativa (Crash Recovery & Hydration)
+CREATE TABLE IF NOT EXISTS active_session_draft (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  state_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;

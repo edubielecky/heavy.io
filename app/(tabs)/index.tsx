@@ -36,8 +36,11 @@ import Theme from '../../src/theme/theme';
 export default function WorkoutScreen() {
   const { 
     currentWorkout, 
+    isSessionActiveInForeground,
     startWorkout, 
     startWorkoutFromRoutine,
+    resumeActiveSession,
+    discardActiveSession,
     cancelWorkout, 
     finishWorkout, 
     addExerciseToCurrentWorkout,
@@ -108,6 +111,17 @@ export default function WorkoutScreen() {
     );
   };
 
+  const handleDiscardRecoveryWorkout = () => {
+    Alert.alert(
+      'Descartar Treino em Andamento?',
+      'Deseja realmente descartar este treino? Todos os dados não finalizados serão perdidos.',
+      [
+        { text: 'Continuar Treino', style: 'cancel' },
+        { text: 'Descartar', style: 'destructive', onPress: discardActiveSession },
+      ]
+    );
+  };
+
   const handleFinishWorkout = () => {
     if (!currentWorkout || currentWorkout.exercises.length === 0) {
       Alert.alert('Treino Vazio', 'Adicione pelo menos um exercício antes de finalizar.');
@@ -170,9 +184,9 @@ export default function WorkoutScreen() {
   }, [routines, routineOfTheDay]);
 
   // =========================================================
-  // VIEW: QUANDO NÃO HÁ TREINO ATIVO (DASHBOARD PRINCIPAL)
+  // VIEW: QUANDO NÃO HÁ TREINO ATIVO NO PRIMEIRO PLANO (DASHBOARD)
   // =========================================================
-  if (!currentWorkout) {
+  if (!currentWorkout || !isSessionActiveInForeground) {
     const totalPRs = Object.keys(personalRecords).length;
     const lastWorkout = workoutHistory[0];
 
@@ -190,6 +204,46 @@ export default function WorkoutScreen() {
               <Text style={styles.badgeModeText}>MODO FORÇA</Text>
             </View>
           </View>
+
+          {/* BANNER DE RESILIÊNCIA E RECUPERAÇÃO DE TREINO (CRASH RECOVERY) */}
+          {currentWorkout && !isSessionActiveInForeground && (
+            <View style={styles.recoveryCard}>
+              <View style={styles.recoveryHeader}>
+                <View style={styles.recoveryBadge}>
+                  <RotateCcw size={12} color={Theme.colors.warning} />
+                  <Text style={styles.recoveryBadgeText}>TREINO INTERROMPIDO</Text>
+                </View>
+                <Text style={styles.recoveryTimeText}>{formatElapsed(elapsedSeconds)} decorridos</Text>
+              </View>
+
+              <Text style={styles.recoveryTitle}>Retomar treino em andamento?</Text>
+              <Text style={styles.recoverySubtitle}>
+                {currentWorkout.name} • {currentWorkout.exercises.length} exercício(s) • {
+                  currentWorkout.exercises.reduce((acc, we) => acc + we.sets.filter(s => s.completed).length, 0)
+                } série(s) feita(s)
+              </Text>
+
+              <View style={styles.recoveryActions}>
+                <TouchableOpacity 
+                  style={styles.recoveryResumeBtn} 
+                  onPress={resumeActiveSession}
+                  activeOpacity={0.8}
+                >
+                  <Play size={14} color={Theme.colors.textInverse} fill={Theme.colors.textInverse} />
+                  <Text style={styles.recoveryResumeText}>Continuar Treino</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.recoveryDiscardBtn} 
+                  onPress={handleDiscardRecoveryWorkout}
+                  activeOpacity={0.8}
+                >
+                  <X size={14} color={Theme.colors.textSecondary} />
+                  <Text style={styles.recoveryDiscardText}>Descartar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Quick Metrics */}
           <View style={styles.statsRow}>
@@ -798,5 +852,91 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  // Estilos do Banner de Crash Recovery
+  recoveryCard: {
+    backgroundColor: '#16161A',
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    padding: 16,
+    marginBottom: 20,
+  },
+  recoveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  recoveryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  recoveryBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.warning,
+    letterSpacing: 0.5,
+  },
+  recoveryTimeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  recoveryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Theme.colors.text,
+    marginBottom: 4,
+  },
+  recoverySubtitle: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    marginBottom: 14,
+  },
+  recoveryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recoveryResumeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: 10,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  recoveryResumeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.textInverse,
+  },
+  recoveryDiscardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  recoveryDiscardText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
   },
 });
