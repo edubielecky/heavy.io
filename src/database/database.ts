@@ -496,6 +496,23 @@ export const getPersonalRecords = (): Record<string, PersonalRecord> => {
   return result;
 };
 
+export const getSessionPRs = (sessionId: string): PersonalRecord[] => {
+  const db = getDatabase();
+  const rows = db.getAllSync<any>(
+    'SELECT * FROM personal_records WHERE achieved_session_id = ?;',
+    [sessionId]
+  );
+  return rows.map(r => ({
+    exerciseId: r.exercise_id,
+    exerciseName: r.exercise_name,
+    maxWeightKg: r.max_weight_kg,
+    repsAtMaxWeight: r.reps_at_max_weight,
+    estimated1RM: r.estimated_1rm,
+    achievedSessionId: r.achieved_session_id || undefined,
+    achievedAt: r.achieved_at,
+  }));
+};
+
 export const savePersonalRecord = (pr: PersonalRecord): void => {
   const db = getDatabase();
   db.runSync(
@@ -693,8 +710,8 @@ export const logSet = (params: {
 
   // Se concluído com valores válidos, checa e atualiza Recorde Pessoal (PR)
   if (completed && params.weightKg > 0 && params.reps > 0) {
-    const exInfo = db.getFirstSync<{ exercise_id: string; exercise_name: string }>(
-      `SELECT wse.exercise_id, e.name as exercise_name
+    const exInfo = db.getFirstSync<{ exercise_id: string; exercise_name: string; session_id: string }>(
+      `SELECT wse.exercise_id, e.name as exercise_name, wse.session_id
        FROM workout_session_exercises wse
        JOIN exercises e ON wse.exercise_id = e.id
        WHERE wse.id = ?;`,
@@ -715,6 +732,7 @@ export const logSet = (params: {
           maxWeightKg: Math.max(params.weightKg, currentPR?.max_weight_kg || 0),
           repsAtMaxWeight: params.reps,
           estimated1RM: Math.max(est1RM, currentPR?.estimated_1rm || 0),
+          achievedSessionId: exInfo.session_id,
           achievedAt: completedAt || new Date().toISOString(),
         });
       }

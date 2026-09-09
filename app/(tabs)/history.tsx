@@ -1,42 +1,86 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView } from 'react-native';
-import { Calendar, Clock, Dumbbell, Weight, Trophy } from 'lucide-react-native';
+import React, { useState, useCallback } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  SafeAreaView, 
+  TouchableOpacity 
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { 
+  Calendar, 
+  Clock, 
+  Dumbbell, 
+  Weight, 
+  Trophy, 
+  ChevronRight, 
+  Activity,
+  Flame
+} from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
+import { WorkoutSession } from '../../src/types/workout';
+import { WorkoutDetailModal } from '../../src/components/WorkoutDetailModal';
+import { getSessionPRs } from '../../src/database/database';
 import Theme from '../../src/theme/theme';
 
 export default function HistoryScreen() {
   const { workoutHistory, loadFromDatabase } = useWorkoutStore();
+  const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
 
-  useEffect(() => {
-    loadFromDatabase();
-  }, []);
+  // Recarrega dados sempre que a aba History ganha foco
+  useFocusEffect(
+    useCallback(() => {
+      loadFromDatabase();
+    }, [loadFromDatabase])
+  );
 
-  const totalVolumeAllTime = workoutHistory.reduce((acc, curr) => acc + curr.totalTonnageKg, 0);
+  const totalVolumeAllTime = workoutHistory.reduce(
+    (acc, curr) => acc + curr.totalTonnageKg, 
+    0
+  );
 
   const formatDate = (isoString: string) => {
-    const d = new Date(isoString);
-    return d.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return isoString;
+    }
   };
 
   const formatDuration = (seconds: number) => {
     const mins = Math.round(seconds / 60);
+    if (mins >= 60) {
+      const hours = Math.floor(mins / 60);
+      const remainder = mins % 60;
+      return `${hours}h ${remainder}m`;
+    }
     return `${mins} min`;
+  };
+
+  const handleOpenDetail = (session: WorkoutSession) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSelectedSession(session);
+    setDetailModalVisible(true);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header Superior Minimalista */}
         <View style={styles.header}>
           <Text style={styles.title}>Histórico de Treinos</Text>
-          <Text style={styles.subtitle}>Registro de volume e evolução nas sessões</Text>
+          <Text style={styles.subtitle}>Consolidação de volume e sobrecarga progressiva</Text>
         </View>
 
-        {/* Total stats card */}
+        {/* Card de Resumo Geral */}
         <View style={styles.overviewCard}>
           <View style={styles.overviewCol}>
             <Text style={styles.overviewValue}>{workoutHistory.length}</Text>
@@ -47,82 +91,123 @@ export default function HistoryScreen() {
             <Text style={[styles.overviewValue, { color: Theme.colors.primary }]}>
               {(totalVolumeAllTime / 1000).toFixed(1)} t
             </Text>
-            <Text style={styles.overviewLabel}>Volume Total</Text>
+            <Text style={styles.overviewLabel}>Tonelagem Acumulada</Text>
           </View>
         </View>
 
-        {/* History List */}
+        {/* Lista de Sessões Passadas */}
         <FlatList
           data={workoutHistory}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={styles.historyCard}>
-              <View style={styles.cardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.workoutName}>{item.name}</Text>
-                  <View style={styles.dateRow}>
-                    <Calendar size={12} color={Theme.colors.textMuted} />
-                    <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            // Checa se houve PRs nesta sessão
+            let sessionPRCount = 0;
+            try {
+              sessionPRCount = getSessionPRs(item.id).length;
+            } catch {}
+
+            return (
+              <TouchableOpacity
+                style={styles.historyCard}
+                onPress={() => handleOpenDetail(item)}
+                activeOpacity={0.8}
+              >
+                {/* Topo do Card: Nome e Duração */}
+                <View style={styles.cardTop}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.workoutName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <View style={styles.dateRow}>
+                      <Calendar size={12} color={Theme.colors.textMuted} />
+                      <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.durationBadge}>
+                    <Clock size={12} color={Theme.colors.primary} />
+                    <Text style={styles.durationText}>{formatDuration(item.durationSeconds)}</Text>
                   </View>
                 </View>
 
-                <View style={styles.durationBadge}>
-                  <Clock size={12} color={Theme.colors.primary} />
-                  <Text style={styles.durationText}>{formatDuration(item.durationSeconds)}</Text>
-                </View>
-              </View>
+                {/* Métricas Consolidadas: Tonelagem, Séries e PRs */}
+                <View style={styles.pillsRow}>
+                  <View style={styles.pill}>
+                    <Weight size={13} color={Theme.colors.textSecondary} />
+                    <Text style={styles.pillText}>
+                      <Text style={styles.metricBold}>
+                        {Math.round(item.totalTonnageKg).toLocaleString('pt-BR')}
+                      </Text> kg volume
+                    </Text>
+                  </View>
 
-              {/* Metrics pills */}
-              <View style={styles.pillsRow}>
-                <View style={styles.pill}>
-                  <Weight size={13} color={Theme.colors.textSecondary} />
-                  <Text style={styles.pillText}>
-                    <Text style={{ fontWeight: '800', color: Theme.colors.text }}>
-                      {item.totalTonnageKg.toLocaleString('pt-BR')}
-                    </Text> kg volume
-                  </Text>
-                </View>
+                  <View style={styles.pill}>
+                    <Dumbbell size={13} color={Theme.colors.textSecondary} />
+                    <Text style={styles.pillText}>
+                      <Text style={styles.metricBold}>{item.totalSets}</Text> séries
+                    </Text>
+                  </View>
 
-                <View style={styles.pill}>
-                  <Dumbbell size={13} color={Theme.colors.textSecondary} />
-                  <Text style={styles.pillText}>
-                    <Text style={{ fontWeight: '800', color: Theme.colors.text }}>
-                      {item.totalSets}
-                    </Text> séries
-                  </Text>
-                </View>
-              </View>
-
-              {/* Exercise summary list */}
-              <View style={styles.exercisesSummary}>
-                {item.exercises.map((we) => {
-                  const completedSets = we.sets.filter((s) => s.completed);
-                  const maxWeight = Math.max(0, ...completedSets.map((s) => s.weightKg));
-
-                  return (
-                    <View key={we.id} style={styles.exerciseSummaryRow}>
-                      <Text style={styles.summaryExerciseName} numberOfLines={1}>
-                        {completedSets.length}x {we.exerciseName}
+                  {sessionPRCount > 0 && (
+                    <View style={[styles.pill, styles.prPill]}>
+                      <Trophy size={12} color={Theme.colors.textInverse} />
+                      <Text style={styles.prPillText}>
+                        {sessionPRCount} {sessionPRCount === 1 ? 'PR' : 'PRs'}
                       </Text>
-                      {maxWeight > 0 && (
-                        <Text style={styles.summaryBestSet}>Melhor: {maxWeight}kg</Text>
-                      )}
                     </View>
-                  );
-                })}
-              </View>
-            </View>
-          )}
+                  )}
+                </View>
+
+                {/* Resumo de Exercícios */}
+                <View style={styles.exercisesSummary}>
+                  {item.exercises.slice(0, 4).map((we) => {
+                    const completedSets = we.sets.filter((s) => s.completed);
+                    const maxWeight = Math.max(0, ...completedSets.map((s) => s.weightKg));
+
+                    return (
+                      <View key={we.id} style={styles.exerciseSummaryRow}>
+                        <Text style={styles.summaryExerciseName} numberOfLines={1}>
+                          {completedSets.length}× {we.exerciseName}
+                        </Text>
+                        {maxWeight > 0 && (
+                          <Text style={styles.summaryBestSet}>Melhor: {maxWeight}kg</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                  {item.exercises.length > 4 && (
+                    <Text style={styles.moreExercisesText}>
+                      + {item.exercises.length - 4} outros exercícios...
+                    </Text>
+                  )}
+                </View>
+
+                {/* Rodapé do Card com Dica de Ação */}
+                <View style={styles.cardFooter}>
+                  <Text style={styles.cardFooterText}>Toque para ver séries detalhadas</Text>
+                  <ChevronRight size={14} color={Theme.colors.textMuted} />
+                </View>
+              </TouchableOpacity>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Trophy size={48} color={Theme.colors.borderLight} />
               <Text style={styles.emptyTitle}>Nenhum treino registrado ainda</Text>
               <Text style={styles.emptySubtitle}>
-                Inicie seu primeiro treino na aba "Treino" para começar a construir seu histórico de força.
+                Inicie seu primeiro treino na aba "Treino" para começar a consolidar seu histórico de força e evolução.
               </Text>
             </View>
           }
+        />
+
+        {/* Modal de Detalhamento da Sessão */}
+        <WorkoutDetailModal
+          visible={detailModalVisible}
+          onClose={() => setDetailModalVisible(false)}
+          session={selectedSession}
         />
       </View>
     </SafeAreaView>
@@ -132,18 +217,18 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Theme.colors.background,
+    backgroundColor: '#09090B',
   },
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 14,
   },
   header: {
     marginBottom: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     color: Theme.colors.text,
     letterSpacing: -0.5,
@@ -156,12 +241,12 @@ const styles = StyleSheet.create({
   },
   overviewCard: {
     flexDirection: 'row',
-    backgroundColor: Theme.colors.surfaceCard,
+    backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.lg,
     padding: 16,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   overviewCol: {
     flex: 1,
@@ -175,6 +260,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     color: Theme.colors.text,
+    fontVariant: ['tabular-nums'],
   },
   overviewLabel: {
     fontSize: 11,
@@ -183,13 +269,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   listContent: {
-    paddingBottom: 30,
+    paddingBottom: 40,
   },
   historyCard: {
-    backgroundColor: Theme.colors.surface,
+    backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.lg,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
@@ -207,7 +293,7 @@ const styles = StyleSheet.create({
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     marginTop: 4,
   },
   dateText: {
@@ -223,35 +309,59 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Theme.borderRadius.sm,
     gap: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
   },
   durationText: {
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.primary,
+    fontVariant: ['tabular-nums'],
   },
   pillsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
     gap: 6,
   },
   pillText: {
     fontSize: 11,
     color: Theme.colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  metricBold: {
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  prPill: {
+    backgroundColor: Theme.colors.primary,
+    borderColor: Theme.colors.primary,
+  },
+  prPillText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: Theme.colors.textInverse,
+    letterSpacing: 0.4,
   },
   exercisesSummary: {
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     borderRadius: Theme.borderRadius.md,
-    padding: 10,
+    padding: 12,
     gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    marginBottom: 12,
   },
   exerciseSummaryRow: {
     flexDirection: 'row',
@@ -266,9 +376,29 @@ const styles = StyleSheet.create({
   },
   summaryBestSet: {
     fontSize: 12,
-    color: Theme.colors.primary,
-    fontWeight: '700',
+    color: Theme.colors.text,
+    fontWeight: '800',
     marginLeft: 8,
+    fontVariant: ['tabular-nums'],
+  },
+  moreExercisesText: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    paddingTop: 10,
+  },
+  cardFooterText: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
