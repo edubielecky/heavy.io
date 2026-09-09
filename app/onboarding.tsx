@@ -46,11 +46,7 @@ export default function OnboardingScreen() {
     if (selectedTrack === 'advanced') {
       router.push('/onboarding-advanced' as any);
     } else {
-      Alert.alert(
-        'Fluxo Guiado Selecionado',
-        'Você escolheu "Montar para mim". A seguir iremos construir o questionário e algoritmo de montagem guiada.',
-        [{ text: 'Entendido', style: 'default' }]
-      );
+      router.push('/onboarding-guided' as any);
     }
   };
 
