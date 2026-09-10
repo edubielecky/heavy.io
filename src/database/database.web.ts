@@ -350,11 +350,13 @@ export const setActiveProgram = (programId: string): void => {
 export const createProgram = (
   name: string,
   description?: string,
-  makeActive: boolean = false
+  daysOrMakeActive?: Array<{ name: string; description?: string; exercises?: any[] }> | boolean
 ): WorkoutProgram => {
   if (!isInitialized) initDatabase();
   const now = new Date().toISOString();
   const id = `prog_${Date.now()}`;
+
+  const makeActive = typeof daysOrMakeActive === 'boolean' ? daysOrMakeActive : programs.length === 0;
 
   if (makeActive) {
     programs = programs.map(p => ({ ...p, isActive: false }));
@@ -364,13 +366,48 @@ export const createProgram = (
     id,
     name,
     description,
-    isActive: makeActive || programs.length === 0,
+    isActive: makeActive,
     routines: [],
     createdAt: now,
     updatedAt: now,
   };
 
   programs.push(newProg);
+
+  if (Array.isArray(daysOrMakeActive) && daysOrMakeActive.length > 0) {
+    daysOrMakeActive.forEach((day, dIdx) => {
+      const routineId = `routine_${id}_${dIdx}_${Date.now()}`;
+      const newRoutine: Routine = {
+        id: routineId,
+        programId: id,
+        name: day.name,
+        description: day.description,
+        orderIndex: dIdx,
+        isSystem: false,
+        exercises: (day.exercises || []).map((ex, eIdx) => {
+          const det = getExerciseById(ex.exerciseId);
+          return {
+            id: `re_${routineId}_${eIdx}_${Date.now()}`,
+            exerciseId: ex.exerciseId,
+            exerciseName: det?.name || ex.exerciseName || ex.exerciseId,
+            targetMuscle: det?.targetMuscle || ex.targetMuscle || 'peito',
+            orderIndex: eIdx,
+            targetSets: ex.targetSets || 3,
+            targetRepsMin: ex.targetRepsMin || 8,
+            targetRepsMax: ex.targetRepsMax || 12,
+            restSeconds: ex.restSeconds || 90,
+            notes: ex.notes,
+          };
+        }),
+        createdAt: now,
+        updatedAt: now,
+      };
+      routines.push(newRoutine);
+      newProg.routines.push(newRoutine);
+    });
+    storageSet(STORAGE_KEYS.ROUTINES, routines);
+  }
+
   storageSet(STORAGE_KEYS.PROGRAMS, programs);
   return newProg;
 };

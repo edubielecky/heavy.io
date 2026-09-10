@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import * as WebDB from './database.web';
 import * as SQLite from 'expo-sqlite';
 import { CREATE_TABLES_SQL } from './schema';
 import { SEED_EXERCISES } from './seedData';
@@ -26,6 +27,9 @@ const DB_NAME = 'heavy_io.db';
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getDatabase();
+  }
   if (!dbInstance) {
     if (Platform.OS === 'web') {
       try {
@@ -64,6 +68,9 @@ const rowToExercise = (row: any): Exercise => ({
  * Inicialização e Migração do Banco de Dados no Boot
  */
 export const initDatabase = (): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.initDatabase(); return;;
+  }
   if (Platform.OS === 'web') return;
   const db = getDatabase();
 
@@ -263,6 +270,9 @@ export const getExercises = (options?: {
   search?: string;
   limit?: number;
 }): Exercise[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getExercises(options);
+  }
   const db = getDatabase();
   let query = 'SELECT * FROM exercises WHERE 1=1';
   const params: any[] = [];
@@ -315,6 +325,9 @@ export interface ExerciseProgressPoint {
  * Consulta a evolução cronológica de carga máxima e 1RM estimado de um exercício
  */
 export const getExerciseProgressHistory = (exerciseId: string): ExerciseProgressPoint[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getExerciseProgressHistory(exerciseId);
+  }
   const db = getDatabase();
 
   const sessions = db.getAllSync<{
@@ -380,6 +393,9 @@ export const getExerciseProgressHistory = (exerciseId: string): ExerciseProgress
 };
 
 export const getExerciseById = (id: string): Exercise | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getExerciseById(id);
+  }
   const db = getDatabase();
   const row = db.getFirstSync('SELECT * FROM exercises WHERE id = ?;', [id]);
   return row ? rowToExercise(row) : null;
@@ -388,6 +404,9 @@ export const getExerciseById = (id: string): Exercise | null => {
 export const createCustomExercise = (
   exercise: Omit<Exercise, 'isCustom' | 'createdAt'>
 ): Exercise => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.createCustomExercise(exercise);
+  }
   const db = getDatabase();
   const now = new Date().toISOString();
 
@@ -424,6 +443,9 @@ export const updateCustomExercise = (
   exerciseId: string,
   updates: Partial<Omit<Exercise, 'id' | 'isCustom' | 'createdAt'>>
 ): Exercise | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.updateCustomExercise(exerciseId, updates);
+  }
   const db = getDatabase();
   const existing = getExerciseById(exerciseId);
   if (!existing || !existing.isCustom) return null;
@@ -466,6 +488,9 @@ export const updateCustomExercise = (
 };
 
 export const deleteCustomExercise = (exerciseId: string): boolean => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.deleteCustomExercise(exerciseId);
+  }
   const db = getDatabase();
   const existing = getExerciseById(exerciseId);
   if (!existing || !existing.isCustom) return false;
@@ -478,6 +503,9 @@ export const deleteCustomExercise = (exerciseId: string): boolean => {
  * CONSULTAS E OPERAÇÕES DE PROGRAMAS / FICHAS DE TREINO
  */
 export const getPrograms = (): WorkoutProgram[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getPrograms();
+  }
   const db = getDatabase();
   const programRows = db.getAllSync<any>(
     'SELECT * FROM workout_programs ORDER BY is_active DESC, created_at DESC;'
@@ -536,6 +564,9 @@ export const getPrograms = (): WorkoutProgram[] => {
 };
 
 export const getActiveProgram = (): WorkoutProgram | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getActiveProgram();
+  }
   const programs = getPrograms();
   const active = programs.find(p => p.isActive);
   if (active) return active;
@@ -547,6 +578,9 @@ export const getActiveProgram = (): WorkoutProgram | null => {
 };
 
 export const setActiveProgram = (programId: string): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.setActiveProgram(programId); return;;
+  }
   const db = getDatabase();
   db.withTransactionSync(() => {
     db.runSync('UPDATE workout_programs SET is_active = 0;');
@@ -559,6 +593,9 @@ export const createProgram = (
   description?: string,
   days?: Array<{ name: string; description?: string; exercises?: any[] }>
 ): WorkoutProgram => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.createProgram(name, description, days);
+  }
   const db = getDatabase();
   const programId = `prog_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const now = new Date().toISOString();
@@ -616,6 +653,9 @@ export const updateProgram = (
   programId: string,
   updates: { name?: string; description?: string }
 ): WorkoutProgram | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.updateProgram(programId, updates);
+  }
   const db = getDatabase();
   const now = new Date().toISOString();
   db.runSync(
@@ -630,6 +670,9 @@ export const updateProgram = (
 };
 
 export const deleteProgram = (programId: string): boolean => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.deleteProgram(programId);
+  }
   const db = getDatabase();
   const all = getPrograms();
   if (all.length <= 1) return false; // Impede exclusão se só resta 1 ficha
@@ -663,6 +706,9 @@ export const addDayToProgram = (
   dayName: string,
   description?: string
 ): Routine => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.addDayToProgram(programId, dayName, description);
+  }
   const db = getDatabase();
   const now = new Date().toISOString();
   const countRow = db.getFirstSync<{ count: number }>(
@@ -692,6 +738,9 @@ export const addDayToProgram = (
 };
 
 export const deleteDayFromProgram = (routineId: string): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.deleteDayFromProgram(routineId); return;;
+  }
   const db = getDatabase();
   db.withTransactionSync(() => {
     db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [routineId]);
@@ -703,6 +752,9 @@ export const deleteDayFromProgram = (routineId: string): void => {
  * CONSULTAS DE ROTINAS (DIAS DE TREINO)
  */
 export const getRoutines = (): Routine[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getRoutines();
+  }
   const db = getDatabase();
   
   // Tenta buscar rotinas da ficha ativa
@@ -768,6 +820,9 @@ export const saveRoutine = (
     orderIndex?: number;
   }
 ): Routine => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.saveRoutine(routine);
+  }
   const db = getDatabase();
   const now = new Date().toISOString();
   const createdAt = routine.createdAt || now;
@@ -834,6 +889,9 @@ export const saveRoutine = (
 };
 
 export const deleteRoutine = (routineId: string): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.deleteRoutine(routineId);
+  }
   const db = getDatabase();
   db.withTransactionSync(() => {
     db.runSync('DELETE FROM routine_exercises WHERE routine_id = ?;', [routineId]);
@@ -845,6 +903,9 @@ export const deleteRoutine = (routineId: string): void => {
  * CONSULTAS E GRAVAÇÃO DE SESSÕES DE TREINO & SÉRIES
  */
 export const saveWorkoutSession = (session: WorkoutSession): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.saveWorkoutSession(session); return;;
+  }
   const db = getDatabase();
 
   db.withTransactionSync(() => {
@@ -906,6 +967,9 @@ export const saveWorkoutSession = (session: WorkoutSession): void => {
 };
 
 export const getWorkoutHistory = (): WorkoutSession[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getWorkoutHistory();
+  }
   const db = getDatabase();
   const sessionRows = db.getAllSync<any>(
     'SELECT * FROM workout_sessions WHERE is_completed = 1 ORDER BY start_time DESC;'
@@ -973,6 +1037,9 @@ export const getWorkoutHistory = (): WorkoutSession[] => {
  * CONSULTAS E GRAVAÇÃO DE RECORDES PESSOAIS (PRs)
  */
 export const getPersonalRecords = (): Record<string, PersonalRecord> => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getPersonalRecords();
+  }
   const db = getDatabase();
   const rows = db.getAllSync<any>('SELECT * FROM personal_records;');
   const result: Record<string, PersonalRecord> = {};
@@ -993,6 +1060,9 @@ export const getPersonalRecords = (): Record<string, PersonalRecord> => {
 };
 
 export const getSessionPRs = (sessionId: string): PersonalRecord[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getSessionPRs(sessionId);
+  }
   const db = getDatabase();
   const rows = db.getAllSync<any>(
     'SELECT * FROM personal_records WHERE achieved_session_id = ?;',
@@ -1010,6 +1080,9 @@ export const getSessionPRs = (sessionId: string): PersonalRecord[] => {
 };
 
 export const savePersonalRecord = (pr: PersonalRecord): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.savePersonalRecord(pr); return;;
+  }
   const db = getDatabase();
   db.runSync(
     `INSERT OR REPLACE INTO personal_records (
@@ -1031,6 +1104,9 @@ export const savePersonalRecord = (pr: PersonalRecord): void => {
  * 1. getWorkoutSession(id): Busca a sessão ativa com exercícios e séries já ordenados.
  */
 export const getWorkoutSession = (id: string): WorkoutSession | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getWorkoutSession(id);
+  }
   const db = getDatabase();
   const sessionRow = db.getFirstSync<any>(
     'SELECT * FROM workout_sessions WHERE id = ?;',
@@ -1101,6 +1177,9 @@ export const getWorkoutSession = (id: string): WorkoutSession | null => {
 export const getLastExercisePerformance = (
   exerciseId: string
 ): LastExercisePerformance | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getLastExercisePerformance(exerciseId);
+  }
   const db = getDatabase();
 
   // Busca a última sessão concluída que teve este exercício
@@ -1168,6 +1247,9 @@ export const getExerciseSessionHistory = (
   exerciseId: string,
   limit: number = 5
 ): ExerciseSessionHistoryItem[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getExerciseSessionHistory(exerciseId, limit);
+  }
   const db = getDatabase();
 
   const sessions = db.getAllSync<{
@@ -1263,6 +1345,9 @@ export const logSet = (params: {
   peakBpm?: number;
   completed?: boolean;
 }): WorkoutSet => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.logSet(params);
+  }
   const db = getDatabase();
 
   const id = params.id || `set_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -1348,6 +1433,9 @@ export const logSet = (params: {
  * 4. completeWorkout(sessionId): Calcula e fecha o volume total e tempo da sessão no banco.
  */
 export const completeWorkout = (sessionId: string): WorkoutSession | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.completeWorkout(sessionId);
+  }
   const db = getDatabase();
 
   const session = getWorkoutSession(sessionId);
@@ -1422,6 +1510,9 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
  * 5. getActiveWorkoutSession(): Recupera a sessão ativa não finalizada do SQLite (is_completed = 0).
  */
 export const getActiveWorkoutSession = (): WorkoutSession | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getActiveWorkoutSession();
+  }
   const db = getDatabase();
   const activeSessionRow = db.getFirstSync<{ id: string }>(
     'SELECT id FROM workout_sessions WHERE is_completed = 0 ORDER BY start_time DESC LIMIT 1;'
@@ -1435,6 +1526,9 @@ export const getActiveWorkoutSession = (): WorkoutSession | null => {
  * 6. deleteWorkoutSession(sessionId): Remove a sessão e todos os seus registros atrelados.
  */
 export const deleteWorkoutSession = (sessionId: string): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.deleteWorkoutSession(sessionId); return;;
+  }
   const db = getDatabase();
   db.withTransactionSync(() => {
     db.runSync(
@@ -1453,6 +1547,9 @@ export const deleteWorkoutSession = (sessionId: string): void => {
  * 7. RESILIÊNCIA E CRASH RECOVERY: Gravação e Recuperação de Rascunho Ativo (active_session_draft)
  */
 export const saveActiveSessionDraft = (session: WorkoutSession): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.saveActiveSessionDraft(session); return;;
+  }
   const db = getDatabase();
   try {
     const serialized = JSON.stringify(session);
@@ -1467,6 +1564,9 @@ export const saveActiveSessionDraft = (session: WorkoutSession): void => {
 };
 
 export const getActiveSessionDraft = (): WorkoutSession | null => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getActiveSessionDraft();
+  }
   const db = getDatabase();
   try {
     const row = db.getFirstSync<{ state_json: string }>(
@@ -1481,6 +1581,9 @@ export const getActiveSessionDraft = (): WorkoutSession | null => {
 };
 
 export const clearActiveSessionDraft = (): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.clearActiveSessionDraft(); return;;
+  }
   const db = getDatabase();
   try {
     db.runSync(`DELETE FROM active_session_draft WHERE id = 'current_active_draft';`);
@@ -1503,6 +1606,9 @@ export const enqueueForSync = (
   entityId: string,
   payload: any
 ): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.enqueueForSync(entityType, entityId, payload); return;;
+  }
   const db = getDatabase();
   const id = `sync_${entityType}_${entityId}`;
   const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -1523,6 +1629,9 @@ export const enqueueForSync = (
  * Recupera itens pendentes de sincronização elegíveis para envio ou re-tentativa.
  */
 export const getPendingSyncItems = (limit: number = 20): SyncQueueItem[] => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.getPendingSyncItems(limit);
+  }
   const db = getDatabase();
   try {
     const rows = db.getAllSync<any>(
@@ -1558,6 +1667,9 @@ export const updateSyncItemStatus = (
   status: SyncStatus,
   errorMessage?: string
 ): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.updateSyncItemStatus(id, status, errorMessage); return;;
+  }
   const db = getDatabase();
   db.runSync(
     `UPDATE sync_queue 
@@ -1574,6 +1686,9 @@ export const updateSyncItemStatus = (
  * Remove o item da fila após sincronização bem-sucedida.
  */
 export const removeSyncedItem = (id: string): void => {
+  if ((Platform.OS as string) === 'web') {
+    return WebDB.removeSyncedItem(id); return;;
+  }
   const db = getDatabase();
   db.runSync('DELETE FROM sync_queue WHERE id = ?;', [id]);
 };

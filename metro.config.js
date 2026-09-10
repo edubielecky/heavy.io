@@ -7,6 +7,10 @@ const config = getDefaultConfig(__dirname);
 // Permite ao Metro empacotar o arquivo WebAssembly do expo-sqlite na Web
 config.resolver.assetExts.push('wasm');
 
+if (!config.resolver.platforms.includes('web')) {
+  config.resolver.platforms.push('web');
+}
+
 // Configura os cabeçalhos HTTP necessários para o WebAssembly e SharedArrayBuffer do SQLite na Web
 config.server = config.server || {};
 config.server.enhanceMiddleware = (middleware) => {
