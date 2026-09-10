@@ -18,6 +18,7 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+import { Platform } from 'react-native';
 import { initDatabase } from '../src/database/database';
 import { 
   initNotificationService, 
@@ -43,11 +44,13 @@ export default function RootLayout() {
     if (loaded) {
       try {
         initDatabase();
-        initNotificationService();
-        requestNotificationPermissions();
+        if (Platform.OS !== 'web') {
+          initNotificationService();
+          requestNotificationPermissions();
+        }
         initSyncQueue();
       } catch (e) {
-        console.error('Failed to initialize SQLite, Notifications, or SyncQueue:', e);
+        console.warn('Failed to initialize SQLite, Notifications, or SyncQueue:', e);
       }
       SplashScreen.hideAsync();
     }
@@ -55,6 +58,7 @@ export default function RootLayout() {
 
   // Listener para ações disparadas na tela de bloqueio (+30s, Pular) e notificações recebidas
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const actionId = response.actionIdentifier;
       const data = response.notification.request.content.data;

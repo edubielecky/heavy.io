@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from 'expo-haptics';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Dumbbell } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Dumbbell, AlertCircle } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import Theme from '../src/theme/theme';
 import { 
@@ -59,6 +59,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Inicializa o player de vídeo do Expo SDK 57 (loop infinito e sem áudio)
   const player = useVideoPlayer(videoSource, p => {
@@ -80,13 +81,25 @@ export default function LoginScreen() {
   const { hasCompletedOnboarding, setUserFlow } = useUserStore();
 
   const handleEmailAuth = async () => {
+    setErrorMessage(null);
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos Obrigatórios', 'Informe e-mail e senha para continuar.');
+      const msg = 'Informe e-mail e senha para continuar.';
+      setErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      if (Platform.OS !== 'web') {
+        Alert.alert('Campos Obrigatórios', msg);
+      }
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Senha Curta', 'A senha deve conter no mínimo 6 caracteres.');
+      const msg = 'A senha deve conter no mínimo 6 caracteres.';
+      setErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      if (Platform.OS !== 'web') {
+        Alert.alert('Senha Curta', msg);
+      }
       return;
     }
 
@@ -108,15 +121,31 @@ export default function LoginScreen() {
         router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
       }
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       let message = 'Falha na autenticação. Verifique os dados e tente novamente.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        message = 'E-mail ou senha incorretos.';
+      if (
+        err.code === 'auth/invalid-credential' || 
+        err.code === 'auth/wrong-password' || 
+        err.code === 'auth/user-not-found'
+      ) {
+        message = isRegister
+          ? 'Não foi possível cadastrar com os dados informados. Verifique as credenciais.'
+          : 'E-mail ou senha incorretos ou usuário inexistente.';
       } else if (err.code === 'auth/email-already-in-use') {
-        message = 'Este e-mail já está cadastrado. Tente entrar na aba "ENTRAR".';
+        message = 'Este e-mail já está cadastrado. Alterne para a aba "ENTRAR".';
       } else if (err.code === 'auth/invalid-email') {
-        message = 'Formato de e-mail inválido.';
+        message = 'Formato de e-mail inválido. Verifique o endereço digitado.';
+      } else if (err.code === 'auth/weak-password') {
+        message = 'A senha escolhida é muito fraca. Mínimo de 6 caracteres.';
+      } else if (err.code === 'auth/too-many-requests') {
+        message = 'Muitas tentativas incorretas. Aguarde alguns instantes.';
+      } else if (err.code === 'auth/network-request-failed') {
+        message = 'Falha de conexão com a rede. Verifique sua internet.';
       }
-      Alert.alert('Erro de Acesso', message);
+      setErrorMessage(message);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Erro de Acesso', message);
+      }
     } finally {
       setLoading(false);
     }
@@ -205,6 +234,7 @@ export default function LoginScreen() {
                 style={[styles.tabButton, !isRegister && styles.tabButtonActive]}
                 onPress={() => {
                   setIsRegister(false);
+                  setErrorMessage(null);
                   Haptics.selectionAsync().catch(() => {});
                 }}
                 activeOpacity={0.8}
@@ -218,6 +248,7 @@ export default function LoginScreen() {
                 style={[styles.tabButton, isRegister && styles.tabButtonActive]}
                 onPress={() => {
                   setIsRegister(true);
+                  setErrorMessage(null);
                   Haptics.selectionAsync().catch(() => {});
                 }}
                 activeOpacity={0.8}
@@ -228,9 +259,17 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Banner de Feedback de Erro Minimalista */}
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <AlertCircle size={15} color="#EF4444" style={styles.errorIcon} />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
             {/* Input E-mail */}
-            <View style={styles.inputWrapper}>
-              <Mail size={18} color={Theme.colors.textMuted} style={styles.inputIcon} />
+            <View style={[styles.inputWrapper, errorMessage && styles.inputWrapperError]}>
+              <Mail size={18} color={errorMessage ? '#EF4444' : Theme.colors.textMuted} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="E-mail"
@@ -239,20 +278,26 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={val => {
+                  setEmail(val);
+                  if (errorMessage) setErrorMessage(null);
+                }}
               />
             </View>
 
             {/* Input Senha */}
-            <View style={styles.inputWrapper}>
-              <Lock size={18} color={Theme.colors.textMuted} style={styles.inputIcon} />
+            <View style={[styles.inputWrapper, errorMessage && styles.inputWrapperError]}>
+              <Lock size={18} color={errorMessage ? '#EF4444' : Theme.colors.textMuted} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Senha (mínimo 6 dígitos)"
                 placeholderTextColor={Theme.colors.textMuted}
                 secureTextEntry={!showPassword}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={val => {
+                  setPassword(val);
+                  if (errorMessage) setErrorMessage(null);
+                }}
               />
               <TouchableOpacity 
                 style={styles.eyeBtn}
@@ -437,6 +482,28 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     fontWeight: '800',
   },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  errorIcon: {
+    flexShrink: 0,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,6 +514,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingHorizontal: 12,
     height: 48,
+  },
+  inputWrapperError: {
+    borderColor: '#7F1D1D',
   },
   inputIcon: {
     marginRight: 10,

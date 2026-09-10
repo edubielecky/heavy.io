@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { CREATE_TABLES_SQL } from './schema';
 import { SEED_EXERCISES } from './seedData';
@@ -26,6 +27,14 @@ let dbInstance: SQLite.SQLiteDatabase | null = null;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!dbInstance) {
+    if (Platform.OS === 'web') {
+      try {
+        dbInstance = SQLite.openDatabaseSync(DB_NAME);
+      } catch (err) {
+        console.warn('[Database] SQLite Web indisponível no navegador:', err);
+      }
+      return dbInstance || ({} as any);
+    }
     dbInstance = SQLite.openDatabaseSync(DB_NAME);
     // Configurações de alta performance e integridade referencial
     dbInstance.execSync('PRAGMA journal_mode = WAL;');
@@ -55,6 +64,7 @@ const rowToExercise = (row: any): Exercise => ({
  * Inicialização e Migração do Banco de Dados no Boot
  */
 export const initDatabase = (): void => {
+  if (Platform.OS === 'web') return;
   const db = getDatabase();
 
   // 1. Cria todas as tabelas e índices
