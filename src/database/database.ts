@@ -668,21 +668,23 @@ export const updateProgram = (
   const all = getPrograms();
   return all.find(p => p.id === programId) || null;
 };
+  }
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.runSync(
+    `UPDATE workout_programs 
+     SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ?
+     WHERE id = ?;`,
+    [updates.name ?? null, updates.description ?? null, now, programId]
+  );
+
+  const all = getPrograms();
+  return all.find(p => p.id === programId) || null;
+};
 
 export const deleteProgram = (programId: string): boolean => {
   if ((Platform.OS as string) === 'web') {
     return WebDB.deleteProgram(programId);
-  }
-  const db = getDatabase();
-  const all = getPrograms();
-  if (all.length <= 1) return false; // Impede exclusão se só resta 1 ficha
-
-  const target = all.find(p => p.id === programId);
-  if (!target) return false;
-
-  db.withTransactionSync(() => {
-    // Se a ficha excluída era a ativa, ativa outra
-    if (target.isActive) {
       const nextActive = all.find(p => p.id !== programId);
       if (nextActive) {
         db.runSync('UPDATE workout_programs SET is_active = 1 WHERE id = ?;', [nextActive.id]);

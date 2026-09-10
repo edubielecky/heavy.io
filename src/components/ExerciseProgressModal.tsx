@@ -62,36 +62,9 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
     }
   }, [exercise]);
 
-  if (!exercise) return null;
-
-  // Métricas de evolução
-  const firstSession = history[0];
-  const lastSession = history[history.length - 1];
-  const maxWeightAllTime = Math.max(0, ...history.map(h => h.maxWeightKg));
-  const max1RMAllTime = Math.max(0, ...history.map(h => h.estimated1RM));
-  
-  const progressionKg = (lastSession && firstSession) 
-    ? lastSession.maxWeightKg - firstSession.maxWeightKg 
-    : 0;
-
-  const handleAdd = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    addExerciseToCurrentWorkout(exercise);
-    onClose();
-  };
-
-  const formatDate = (isoString: string) => {
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-    } catch {
-      return isoString;
-    }
-  };
-
   // Coordenadas para o gráfico SVG de evolução
   const chartData = useMemo(() => {
-    if (history.length === 0) return null;
+    if (!history || history.length === 0) return null;
 
     const points = history.slice(-7); // Últimos até 7 registros
     const allWeights = points.map(p => p.maxWeightKg);
@@ -123,6 +96,33 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
 
     return { coords, pathD, minW, maxW };
   }, [history]);
+
+  if (!exercise) return null;
+
+  // Métricas de evolução
+  const firstSession = history[0];
+  const lastSession = history[history.length - 1];
+  const maxWeightAllTime = Math.max(0, ...history.map(h => h.maxWeightKg));
+  const max1RMAllTime = Math.max(0, ...history.map(h => h.estimated1RM));
+  
+  const progressionKg = (lastSession && firstSession) 
+    ? lastSession.maxWeightKg - firstSession.maxWeightKg 
+    : 0;
+
+  const handleAdd = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    addExerciseToCurrentWorkout(exercise);
+    onClose();
+  };
+
+  const formatDate = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    } catch {
+      return isoString;
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
