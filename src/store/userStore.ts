@@ -42,6 +42,7 @@ interface UserStoreState {
   completeOnboarding: (profileData?: Partial<UserProfile>) => void;
   resetOnboarding: () => void;
   resetUserFlow: () => void;
+  logout: () => void;
 }
 
 export const useUserStore = create<UserStoreState>()(
@@ -113,6 +114,14 @@ export const useUserStore = create<UserStoreState>()(
           hasCompletedOnboarding: false,
           userFlow: 'new_user',
           profile: null,
+        });
+      },
+
+      logout: () => {
+        set({
+          userFlow: 'existing_user',
+          profile: null,
+          onboardingTrack: null,
         });
       },
     }),

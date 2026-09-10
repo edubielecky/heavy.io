@@ -63,7 +63,8 @@ export default function AthleteControlCenterScreen() {
     preferences, 
     updateMetrics, 
     updatePreferences, 
-    resetOnboarding 
+    resetOnboarding,
+    logout
   } = useUserStore();
 
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -73,6 +74,8 @@ export default function AthleteControlCenterScreen() {
   const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Estado da Conexão com Health Connect
   const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
@@ -231,6 +234,29 @@ export default function AthleteControlCenterScreen() {
     }
   };
 
+  const handleConfirmLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleExecuteLogout = async () => {
+    setIsLoggingOut(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('Erro ao deslogar do Firebase:', err);
+    }
+    try {
+      logout();
+    } catch (err) {
+      console.warn('Erro ao resetar userStore:', err);
+    }
+    setIsLogoutModalOpen(false);
+    setIsLoggingOut(false);
+    router.replace('/');
+  };
+
   const getExperienceLabel = (exp?: string) => {
     switch (exp) {
       case 'iniciante': return 'Iniciante (< 6 meses)';
@@ -259,9 +285,20 @@ export default function AthleteControlCenterScreen() {
               {auth.currentUser?.email || 'Modo Local • 100% Offline'}
             </Text>
           </View>
-          <View style={styles.badgeOffline}>
-            <CheckCircle2 size={12} color={Theme.colors.success} />
-            <Text style={styles.badgeOfflineText}>Ativo</Text>
+          <View style={styles.headerRightActions}>
+            <View style={styles.badgeOffline}>
+              <CheckCircle2 size={12} color={Theme.colors.success} />
+              <Text style={styles.badgeOfflineText}>Ativo</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.headerLogoutBtn}
+              onPress={handleConfirmLogout}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <LogOut size={12} color={Theme.colors.danger} />
+              <Text style={styles.headerLogoutBtnText}>Sair</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -597,27 +634,39 @@ export default function AthleteControlCenterScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
+        </View>
 
-          <View style={styles.accountActionRow}>
-            <Text style={styles.accountStatusLabel}>
-              {auth.currentUser ? 'Conta Conectada' : 'Modo Convidado'}
-            </Text>
-            <TouchableOpacity 
-              style={styles.logoutBtn} 
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                try {
-                  await signOut(auth);
-                } catch {}
-                router.replace('/');
-              }}
-              activeOpacity={0.7}
-            >
-              <LogOut size={14} color={Theme.colors.danger} />
-              <Text style={styles.logoutBtnText}>Encerrar Sessão</Text>
-            </TouchableOpacity>
+        {/* 7. Conta & Sessão */}
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <User size={16} color={Theme.colors.primary} />
+          <Text style={styles.sectionTitle}>Conta & Sessão</Text>
+        </View>
+
+        <View style={styles.accountCard}>
+          <View style={styles.accountInfoRow}>
+            <View style={styles.accountAvatarMini}>
+              <User size={18} color={Theme.colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.accountEmailText} numberOfLines={1}>
+                {auth.currentUser?.email || 'Atleta de Força (Modo Local)'}
+              </Text>
+              <Text style={styles.accountStatusSub}>
+                {auth.currentUser ? 'Autenticado via Firebase Auth' : 'Modo Offline • Sem login'}
+              </Text>
+            </View>
           </View>
+
+          <View style={styles.accountDivider} />
+
+          <TouchableOpacity 
+            style={styles.fullLogoutBtn} 
+            onPress={handleConfirmLogout}
+            activeOpacity={0.7}
+          >
+            <LogOut size={16} color={Theme.colors.danger} />
+            <Text style={styles.fullLogoutBtnText}>Encerrar Sessão da Conta</Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
@@ -813,6 +862,51 @@ export default function AthleteControlCenterScreen() {
         onClose={() => setIsRoutineManagerOpen(false)}
         onProgramsUpdated={refreshRoutines}
       />
+
+      {/* MODAL 4: Confirmação de Logout */}
+      <Modal
+        visible={isLogoutModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isLoggingOut) setIsLogoutModalOpen(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.logoutModalBox}>
+            <View style={styles.logoutModalIconWrap}>
+              <LogOut size={22} color={Theme.colors.danger} />
+            </View>
+
+            <Text style={styles.logoutModalTitle}>Encerrar Sessão?</Text>
+            <Text style={styles.logoutModalDesc}>
+              Você será desconectado da sua conta. Seus dados e treinos salvos localmente permanecerão intactos neste dispositivo.
+            </Text>
+
+            <View style={styles.logoutModalActions}>
+              <TouchableOpacity
+                style={styles.logoutCancelBtn}
+                onPress={() => setIsLogoutModalOpen(false)}
+                disabled={isLoggingOut}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.logoutCancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.logoutConfirmBtn}
+                onPress={handleExecuteLogout}
+                disabled={isLoggingOut}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.logoutConfirmBtnText}>
+                  {isLoggingOut ? 'Saindo...' : 'Sim, Sair'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -875,6 +969,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: Theme.colors.success,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Theme.borderRadius.sm,
+    gap: 4,
+  },
+  headerLogoutBtnText: {
+    color: Theme.colors.danger,
+    fontSize: 10,
+    fontWeight: '700',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1252,28 +1367,126 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  accountActionRow: {
+  accountCard: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  accountInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  accountStatusLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Theme.colors.textSecondary,
+  accountAvatarMini: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoutBtn: {
+  accountEmailText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  accountStatusSub: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  accountDivider: {
+    height: 1,
+    backgroundColor: Theme.colors.border,
+    marginVertical: 14,
+  },
+  fullLogoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Theme.borderRadius.sm,
-    gap: 6,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    gap: 8,
   },
-  logoutBtnText: {
+  fullLogoutBtnText: {
     color: Theme.colors.danger,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  logoutModalBox: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: Theme.colors.surfaceCard,
+    borderRadius: Theme.borderRadius.lg,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    alignItems: 'center',
+  },
+  logoutModalIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  logoutModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Theme.colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  logoutModalDesc: {
+    fontSize: 13,
+    color: Theme.colors.textSecondary,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    alignItems: 'center',
+  },
+  logoutCancelBtnText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  logoutConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    backgroundColor: '#7F1D1D',
+    borderWidth: 1,
+    borderColor: '#991B1B',
+    alignItems: 'center',
+  },
+  logoutConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
   modalOverlay: {
