@@ -352,7 +352,52 @@ function scoreExerciseCandidate(
     }
   }
 
-  // 5. Antropometria do Atleta (Altura e Alavancas)
+  // 5. Preferência por Sobrecarga Real em Equipamento Comercial
+  // Em academia comercial ou de condomínio, calistenia no chão (flexão de braço)
+  // é estritamente evitada em favor de supinos com barra, halteres e máquinas.
+  if (criteria.inputs.equipment === 'commercial' || criteria.inputs.equipment === 'condo') {
+    if (ex.equipment === 'bodyweight') {
+      if (ex.id.includes('pushup') || ex.id.includes('push_up')) {
+        score -= 250; // Veto a flexões no solo quando há banco, barra e halteres
+      } else {
+        score -= 40;
+      }
+    } else if (ex.equipment === 'barbell' || ex.equipment === 'dumbbell' || ex.equipment === 'machine') {
+      score += 25; // Prioridade para sobrecarga progressiva com peso livre e máquinas
+    }
+  }
+
+  // 6. Padrões Ouro da Ciência de Força para Peitoral
+  if (criteria.targetMuscle === 'peito' && (criteria.tier === 'primary_compound' || criteria.tier === 'secondary_compound')) {
+    if (
+      ex.id === 'barbell_bench_press' ||
+      ex.id === 'dumbbell_bench_press' ||
+      ex.id === 'incline_dumbbell_bench_press' ||
+      ex.id === 'incline_barbell_bench_press' ||
+      ex.id === 'machine_chest_press' ||
+      ex.id === 'incline_machine_chest_press'
+    ) {
+      score += 55; // Garante que supinos reais com ferro liderem a seleção
+    }
+  }
+
+  // 7. Padrões Ouro da Ciência de Hipertrofia para Posteriores de Coxa
+  // Hamstrings têm 2 funções: Hinge (extensão quadril) e Knee Flexion (flexão joelho)
+  if (criteria.targetMuscle === 'isquiotibiais') {
+    if (ex.id === 'seated_leg_curl_machine') {
+      score += 50; // Superior em hipertrofia por trabalhar em maior alongamento (Maeo et al., 2021)
+    } else if (
+      ex.id === 'romanian_deadlift_barbell' ||
+      ex.id === 'romanian_deadlift_dumbbell' ||
+      ex.id === 'stiff_leg_deadlift_barbell'
+    ) {
+      score += 45; // Máxima tensão mecânica sob alongamento proximal
+    } else if (ex.id === 'lying_leg_curl_machine') {
+      score += 35;
+    }
+  }
+
+  // 8. Antropometria do Atleta (Altura e Alavancas)
   const height = criteria.inputs.heightCm || 178;
   const weight = criteria.inputs.weightKg || 80;
 
@@ -371,7 +416,7 @@ function scoreExerciseCandidate(
     score -= 20; // Risco de sobrecarga excessiva prematura no ombro
   }
 
-  // 6. Preferências por Sexo Biológico (ênfase anatômica e alinhamento articular)
+  // 9. Preferências por Sexo Biológico (ênfase anatômica e alinhamento articular)
   if (criteria.inputs.biologicalSex === 'female') {
     if (ex.targetMuscle === 'gluteos' || ex.id === 'barbell_hip_thrust' || ex.id === 'dumbbell_romanian_deadlift') {
       score += 20;
@@ -381,7 +426,7 @@ function scoreExerciseCandidate(
     }
   }
 
-  // 7. Modificador Pseudo-Estocástico Determinístico (Garante treino 100% individualizado)
+  // 10. Modificador Pseudo-Estocástico Determinístico (Garante treino 100% individualizado)
   // Cada exercício recebe um pequeno bônus baseado no hash do perfil do atleta
   const nameHash = ex.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const variance = ((nameHash * 13 + criteria.seed) % 17) - 8; // Varia entre -8 e +8
@@ -532,36 +577,36 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     splitType = 'full_body';
     planTitle = `Full Body Científico ${effectiveInputs.frequency}x: Alta Densidade de Tensão`;
 
-    // Treino A (Foco Cadeia Anterior & Empurrar)
+    // Treino A (Foco Cadeia Anterior, Hinge & Empurrar)
     const exA: PlannedExercise[] = [];
     exA.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
     exA.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
     exA.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull', 'vertical_pull']));
-    exA.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
-    if (exCount >= 5) exA.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
-    if (exCount >= 6) exA.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
+    exA.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge'])); // Extensão de quadril (RDL/Stiff)
+    if (exCount >= 5) exA.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Flexão de joelho (Cadeira Flexora)
+    if (exCount >= 6) exA.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
 
-    // Treino B (Foco Cadeia Posterior & Puxar)
+    // Treino B (Foco Cadeia Posterior, Flexão de Joelho & Puxar)
     const exB: PlannedExercise[] = [];
-    exB.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+    exB.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Flexão de joelho isolada
+    exB.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push'])); // Supino Inclinado com Halteres
     exB.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull', 'horizontal_pull']));
-    exB.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
     exB.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge', 'isolation']));
-    if (exCount >= 5) exB.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 5) exB.push(createPlannedEx('isquiotibiais', 'secondary_compound', ['hinge'])); // Stiff ou RDL
     if (exCount >= 6) exB.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
 
     sessions = [
       {
         id: 'guided_fb_a',
         name: 'Treino A - Full Body (Tensão Mecânica & Cadeia Anterior)',
-        focus: 'Quadríceps, Peitoral & Dorsais',
+        focus: 'Quadríceps, Peitoral, Dorsais & Isquiotibiais',
         dayOfWeek: 'Segunda-feira',
         exercises: exA,
       },
       {
         id: 'guided_fb_b',
         name: 'Treino B - Full Body (Alongamento & Cadeia Posterior)',
-        focus: 'Posteriores, Costas & Ombros',
+        focus: 'Isquiotibiais, Peito Inclinado, Costas & Ombros',
         dayOfWeek: effectiveInputs.frequency === 2 ? 'Quinta-feira' : 'Quarta-feira',
         exercises: exB,
       },
@@ -570,17 +615,17 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     if (effectiveInputs.frequency === 3) {
       // Treino C (Foco Equilíbrio Hipertrófico & Acessórios)
       const exC: PlannedExercise[] = [];
-      exC.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+      exC.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
       exC.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
       exC.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
-      exC.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+      exC.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora Sentada
       if (exCount >= 5) exC.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
       if (exCount >= 6) exC.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
 
       sessions.push({
         id: 'guided_fb_c',
         name: 'Treino C - Full Body (Volume Efetivo & Sinergistas)',
-        focus: 'Peito, Dorsais, Pernas & Glúteo',
+        focus: 'Peito, Dorsais, Pernas & Posteriores',
         dayOfWeek: 'Sexta-feira',
         exercises: exC,
       });
@@ -594,47 +639,47 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     splitType = 'upper_lower';
     planTitle = 'Upper / Lower 4x: Frequência Ótima & Estímulo-Fadiga Calibrado';
 
-    // Upper A (Força Mecânica)
+    // Upper A (Força Mecânica Primária)
     const exUA: PlannedExercise[] = [];
-    exUA.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
-    exUA.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull']));
-    exUA.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
-    exUA.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
-    if (exCount >= 5) exUA.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
-    if (exCount >= 6) exUA.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+    exUA.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push'])); // Supino Reto com Barra/Halteres
+    exUA.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull'])); // Remada Pesada
+    exUA.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push'])); // Desenvolvimento
+    exUA.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull'])); // Puxada Alta
+    if (exCount >= 5) exUA.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push'])); // Supino Inclinado Halteres
+    if (exCount >= 6) exUA.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
 
-    // Lower A (Sobrecarga de Joelho & Quadril)
+    // Lower A (Sobrecarga de Joelho & Hinge de Quadril)
     const exLA: PlannedExercise[] = [];
-    exLA.push(createPlannedEx('quadriceps', 'primary_compound', ['squat']));
-    exLA.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
-    exLA.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat']));
-    exLA.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-    if (exCount >= 5) exLA.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
+    exLA.push(createPlannedEx('quadriceps', 'primary_compound', ['squat'])); // Agachamento / Leg Press
+    exLA.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge'])); // RDL com Barra / Halteres
+    exLA.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat'])); // Búlgaro / Passada
+    exLA.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora Sentada (Maeo 2021)
+    if (exCount >= 5) exLA.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
     if (exCount >= 6) exLA.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
 
     // Upper B (Alongamento & Volume Hipertrófico)
     const exUB: PlannedExercise[] = [];
-    exUB.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull']));
-    exUB.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
-    exUB.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
-    exUB.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
-    if (exCount >= 5) exUB.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
-    if (exCount >= 6) exUB.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
+    exUB.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull'])); // Puxada Articulada
+    exUB.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push'])); // Supino Inclinado com Barra/Halteres
+    exUB.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull'])); // Remada Baixa
+    exUB.push(createPlannedEx('peito', 'peak_contraction', ['isolation'])); // Crossover na Polia / Crucifixo
+    if (exCount >= 5) exUB.push(createPlannedEx('ombros', 'peak_contraction', ['isolation'])); // Elevação Lateral
+    if (exCount >= 6) exUB.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
 
-    // Lower B (Alongamento Muscular & Cadeia Posterior)
+    // Lower B (Alongamento Muscular & Flexão de Joelho)
     const exLB: PlannedExercise[] = [];
-    exLB.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
-    exLB.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
-    exLB.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
-    exLB.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-    if (exCount >= 5) exLB.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
-    if (exCount >= 6) exLB.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
+    exLB.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora Sentada
+    exLB.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge'])); // Hack Squat / Leg Press 45
+    exLB.push(createPlannedEx('isquiotibiais', 'secondary_compound', ['hinge'])); // Stiff com Barra / Halteres
+    exLB.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation'])); // Cadeira Extensora
+    if (exCount >= 5) exLB.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 6) exLB.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge'])); // Elevação Pélvica
 
     sessions = [
       { id: 'guided_ul_ua', name: 'Treino A - Superiores (Tensão Mecânica Primária)', focus: 'Peitoral, Dorsais & Deltóides', dayOfWeek: 'Segunda-feira', exercises: exUA },
-      { id: 'guided_ul_la', name: 'Treino B - Inferiores (Força & Sobrecarga de Quadril)', focus: 'Quadríceps, Isquiotibiais & Panturrilha', dayOfWeek: 'Terça-feira', exercises: exLA },
-      { id: 'guided_ul_ub', name: 'Treino C - Superiores (Hipertrofia & Posição Alongada)', focus: 'Dorsais, Peitoral & Braços', dayOfWeek: 'Quinta-feira', exercises: exUB },
-      { id: 'guided_ul_lb', name: 'Treino D - Inferiores (Alongamento Muscular & Glúteos)', focus: 'Cadeia Posterior, Quadríceps & Core', dayOfWeek: 'Sexta-feira', exercises: exLB },
+      { id: 'guided_ul_la', name: 'Treino B - Inferiores (Força & Sobrecarga de Quadril)', focus: 'Quadríceps, Isquiotibiais (RDL + Flexora) & Panturrilhas', dayOfWeek: 'Terça-feira', exercises: exLA },
+      { id: 'guided_ul_ub', name: 'Treino C - Superiores (Hipertrofia & Posição Alongada)', focus: 'Peito Inclinado, Dorsais & Crossover', dayOfWeek: 'Quinta-feira', exercises: exUB },
+      { id: 'guided_ul_lb', name: 'Treino D - Inferiores (Alongamento Muscular & Glúteos)', focus: 'Isquiotibiais (Flexora + Stiff), Quadríceps & Glúteos', dayOfWeek: 'Sexta-feira', exercises: exLB },
     ];
   }
 
@@ -650,52 +695,52 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     s1.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
     s1.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull']));
     s1.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
-    s1.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
-    if (exCount >= 5) s1.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
-    if (exCount >= 6) s1.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+    s1.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+    if (exCount >= 5) s1.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
+    if (exCount >= 6) s1.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
 
     // Dia 2: Lower Força
     const s2: PlannedExercise[] = [];
     s2.push(createPlannedEx('quadriceps', 'primary_compound', ['squat']));
-    s2.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+    s2.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge'])); // RDL
     s2.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat']));
-    s2.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-    if (exCount >= 5) s2.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
+    s2.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora
+    if (exCount >= 5) s2.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
     if (exCount >= 6) s2.push(createPlannedEx('abdomen', 'core', ['core_anti_extension']));
 
     // Dia 3: Push Hipertrofia (Alongamento & Feixes)
     const s3: PlannedExercise[] = [];
-    s3.push(createPlannedEx('peito', 'stretch_isolation', ['horizontal_push']));
-    s3.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+    s3.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push'])); // Supino Inclinado com Halteres
+    s3.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+    s3.push(createPlannedEx('peito', 'peak_contraction', ['isolation'])); // Crossover Polia
     s3.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
-    s3.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
-    if (exCount >= 5) s3.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
-    if (exCount >= 6) s3.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 5) s3.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 6) s3.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
 
     // Dia 4: Pull Hipertrofia
     const s4: PlannedExercise[] = [];
     s4.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull']));
     s4.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
     s4.push(createPlannedEx('trapezio', 'stretch_isolation', ['isolation']));
-    s4.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
+    s4.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
     if (exCount >= 5) s4.push(createPlannedEx('costas', 'peak_contraction', ['isolation']));
-    if (exCount >= 6) s4.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 6) s4.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
 
     // Dia 5: Legs Hipertrofia & Detalhe
     const s5: PlannedExercise[] = [];
-    s5.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
-    s5.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
-    s5.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
-    s5.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-    if (exCount >= 5) s5.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
-    if (exCount >= 6) s5.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
+    s5.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora
+    s5.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge'])); // Hack / Leg Press
+    s5.push(createPlannedEx('isquiotibiais', 'secondary_compound', ['hinge'])); // Stiff
+    s5.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation'])); // Cadeira Extensora
+    if (exCount >= 5) s5.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+    if (exCount >= 6) s5.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
 
     sessions = [
       { id: 'guided_h5_u', name: 'Treino A - Superiores (Foco Força & Tensão)', focus: 'Peitoral, Costas & Ombros', dayOfWeek: 'Segunda-feira', exercises: s1 },
-      { id: 'guided_h5_l', name: 'Treino B - Inferiores (Força de Agachamento & Hinge)', focus: 'Quadríceps, Isquiotibiais & Panturrilhas', dayOfWeek: 'Terça-feira', exercises: s2 },
-      { id: 'guided_h5_push', name: 'Treino C - Push (Hipertrofia em Posição Alongada)', focus: 'Peitoral, Deltoides & Tríceps', dayOfWeek: 'Quinta-feira', exercises: s3 },
+      { id: 'guided_h5_l', name: 'Treino B - Inferiores (Força de Agachamento & Hinge)', focus: 'Quadríceps & Isquiotibiais (RDL + Flexora)', dayOfWeek: 'Terça-feira', exercises: s2 },
+      { id: 'guided_h5_push', name: 'Treino C - Push (Hipertrofia em Posição Alongada)', focus: 'Peitoral Inclinado, Deltoides & Tríceps', dayOfWeek: 'Quinta-feira', exercises: s3 },
       { id: 'guided_h5_pull', name: 'Treino D - Pull (Hipertrofia de Dorsais & Trapézio)', focus: 'Dorsais, Trapézio & Bíceps', dayOfWeek: 'Sexta-feira', exercises: s4 },
-      { id: 'guided_h5_legs', name: 'Treino E - Legs (Estresse Metabólico & Volume)', focus: 'Membros Inferiores & Glúteo', dayOfWeek: 'Sábado', exercises: s5 },
+      { id: 'guided_h5_legs', name: 'Treino E - Legs (Estresse Metabólico & Volume)', focus: 'Isquiotibiais (Flexora + Stiff), Quads & Panturrilhas', dayOfWeek: 'Sábado', exercises: s5 },
     ];
   }
 
@@ -709,16 +754,16 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     const makePush = (letter: string, day: string, isA: boolean): PlannedSession => {
       const exList: PlannedExercise[] = [];
       if (isA) {
-        exList.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
-        exList.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
-        exList.push(createPlannedEx('peito', 'stretch_isolation', ['horizontal_push']));
+        exList.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push'])); // Supino Reto Barra/Halteres
+        exList.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push'])); // Desenvolvimento
+        exList.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push'])); // Supino Inclinado
         exList.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
         if (exCount >= 5) exList.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
         if (exCount >= 6) exList.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
       } else {
-        exList.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
-        exList.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
-        exList.push(createPlannedEx('peito', 'peak_contraction', ['horizontal_push']));
+        exList.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push'])); // Supino Inclinado com Halteres
+        exList.push(createPlannedEx('peito', 'peak_contraction', ['isolation'])); // Crossover na Polia
+        exList.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation'])); // Elevação Lateral
         exList.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
         if (exCount >= 5) exList.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
         if (exCount >= 6) exList.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
@@ -763,25 +808,25 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     const makeLegs = (letter: string, day: string, isA: boolean): PlannedSession => {
       const exList: PlannedExercise[] = [];
       if (isA) {
-        exList.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
-        exList.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
-        exList.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
-        exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-        if (exCount >= 5) exList.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
+        exList.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge'])); // Agachamento / Leg Press
+        exList.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge'])); // RDL
+        exList.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat'])); // Búlgaro
+        exList.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora Sentada
+        if (exCount >= 5) exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
         if (exCount >= 6) exList.push(createPlannedEx('abdomen', 'core', ['core_anti_extension']));
       } else {
-        exList.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
-        exList.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
-        exList.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
-        exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
-        if (exCount >= 5) exList.push(createPlannedEx('isquiotibiais', 'peak_contraction', ['isolation']));
-        if (exCount >= 6) exList.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
+        exList.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora
+        exList.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge'])); // Hack Squat
+        exList.push(createPlannedEx('isquiotibiais', 'secondary_compound', ['hinge'])); // Stiff com Barra/Halteres
+        exList.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation'])); // Cadeira Extensora
+        if (exCount >= 5) exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+        if (exCount >= 6) exList.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
       }
 
       return {
         id: `guided_ppl_legs_${letter.toLowerCase()}`,
         name: `Treino ${letter} - Legs (${isA ? 'Foco Joelho/Quadríceps' : 'Foco Quadril/Posterior'})`,
-        focus: 'Quadríceps, Isquiotibiais, Glúteos & Panturrilhas',
+        focus: 'Quadríceps, Isquiotibiais (RDL + Flexora), Glúteos & Panturrilhas',
         dayOfWeek: day,
         exercises: exList,
       };
