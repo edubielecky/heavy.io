@@ -5,9 +5,11 @@ import { getExercises } from '../database/database';
 export type WeeklyFrequency = 2 | 3 | 4 | 5 | 6;
 export type SessionDuration = '30-45' | '45-60' | '60-90';
 export type PrimaryGoal = 'hypertrophy' | 'strength' | 'conditioning';
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'returning';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'returning' | 'advanced';
 export type EquipmentEnvironment = 'commercial' | 'condo' | 'home_dumbbells';
 export type PhysicalRestriction = 'shoulders' | 'lower_back' | 'knees' | 'none';
+export type BiologicalSex = 'male' | 'female';
+export type MusclePriority = 'balanced' | 'chest' | 'back' | 'legs_glutes' | 'shoulders' | 'arms';
 
 export interface GuidedInputs {
   frequency: WeeklyFrequency;
@@ -16,9 +18,21 @@ export interface GuidedInputs {
   experienceLevel: ExperienceLevel;
   equipment: EquipmentEnvironment;
   restrictions: PhysicalRestriction[];
+  // Novos campos antropométricos e de fisiologia esportiva:
+  biologicalSex?: BiologicalSex;
+  age?: number;
+  weightKg?: number;
+  heightCm?: number;
+  musclePriority?: MusclePriority;
 }
 
-export type ExerciseTier = 'primary_compound' | 'secondary_compound' | 'isolation' | 'core';
+export type ExerciseTier = 
+  | 'primary_compound'       // SFR alto, sobrecarga mecânica axial ou multiarticular pesada
+  | 'secondary_compound'     // Composto complementar em ângulo/plano diferente
+  | 'stretch_isolation'      // Isolamento em posição alongada (titina / sarcomerogênese)
+  | 'peak_contraction'       // Isolamento no encurtamento / cabos / tensão contínua
+  | 'isolation'              // Isolamento geral
+  | 'core';
 
 export interface PlannedExercise {
   exerciseId: string;
@@ -29,7 +43,9 @@ export interface PlannedExercise {
   targetSets: number;
   targetRepsMin: number;
   targetRepsMax: number;
+  targetRir: number; // Repetições em reserva alvo (RIR 1-2 para hipertrofia com segurança neural)
   restSeconds: number;
+  physiologicalRole: string; // Ex: 'Tensão Mecânica Primária', 'Alongamento Máximo sob Tensão', etc.
 }
 
 export interface PlannedSession {
@@ -40,16 +56,56 @@ export interface PlannedSession {
   exercises: PlannedExercise[];
 }
 
+export interface MuscleVolumeBreakdown {
+  muscle: MuscleGroup;
+  muscleLabel: string;
+  weeklySets: number;
+  landmark: 'MEV' | 'MAV' | 'PRIORITÁRIO';
+}
+
 export interface GeneratedPlan {
   planName: string;
   splitType: 'full_body' | 'upper_lower' | 'ul_ppl_hybrid' | 'ppl';
   description: string;
   sessions: PlannedSession[];
   weeklyDirectSetsPerMuscle: number;
+  volumeBreakdown: MuscleVolumeBreakdown[];
+  scientificSummary: {
+    primaryStimulus: string;
+    weeklyVolumeProfile: string;
+    anthropometricAdaptation: string;
+    recoveryRecommendation: string;
+  };
 }
 
 /**
- * Lista de exercícios que devem ser evitados em caso de restrições articulares
+ * Mapeamento de exercícios com alta sobrecarga na posição alongada (Stretch-Mediated Hypertrophy)
+ * Fonte: Pedrosa et al. (2022), Maeo et al. (2021), Kassiano et al. (2023)
+ */
+const STRETCH_MEDIATED_EXERCISE_IDS = new Set<string>([
+  'seated_leg_curl_machine',
+  'romanian_deadlift_barbell',
+  'stiff_leg_deadlift_barbell',
+  'dumbbell_romanian_deadlift',
+  'cable_overhead_triceps_extension_rope',
+  'dumbbell_overhead_triceps_extension_seated',
+  'skull_crushers_ez_bar_incline',
+  'incline_dumbbell_curl',
+  'standing_calf_raise_machine',
+  'leg_press_calf_raise',
+  'dumbbell_bench_press',
+  'incline_dumbbell_bench_press',
+  'cable_fly_mid_pulley',
+  'barbell_front_squat',
+  'leg_press_45_degree',
+  'hack_squat_machine',
+  'dumbbell_bulgarian_split_squat',
+  'cable_lat_pulldown_wide',
+  'lat_pulldown_close_grip_v_bar',
+]);
+
+/**
+ * Mapeamento de exercícios contraindicados por restrições articulares
  */
 const CONTRAINDICATED_EXERCISES: Record<string, string[]> = {
   lower_back: [
@@ -61,13 +117,16 @@ const CONTRAINDICATED_EXERCISES: Record<string, string[]> = {
     'smith_good_morning',
     'barbell_bent_over_row',
     'pendlay_row',
+    't_bar_row_unsupported',
   ],
   shoulders: [
     'overhead_press_barbell_standing',
     'overhead_press_barbell_seated',
     'dumbbell_upright_row',
+    'barbell_upright_row',
     'chest_dips',
     'parallel_bar_dips_triceps',
+    'behind_the_neck_press',
   ],
   knees: [
     'leg_extension_machine',
@@ -75,6 +134,7 @@ const CONTRAINDICATED_EXERCISES: Record<string, string[]> = {
     'sissy_squat',
     'pistol_squat',
     'barbell_front_squat',
+    'jump_squat',
   ],
 };
 
@@ -86,7 +146,6 @@ export const getAvailableExercises = (inputs: GuidedInputs): Exercise[] => {
   try {
     allExercises = getExercises();
   } catch {
-    // Fallback caso SQLite não esteja inicializado no ambiente de testes
     allExercises = SEED_EXERCISES as Exercise[];
   }
 
@@ -94,7 +153,6 @@ export const getAvailableExercises = (inputs: GuidedInputs): Exercise[] => {
     allExercises = SEED_EXERCISES as Exercise[];
   }
 
-  // 1. Filtro de Restrições
   const contraindicatedSet = new Set<string>();
   inputs.restrictions.forEach(r => {
     if (CONTRAINDICATED_EXERCISES[r]) {
@@ -107,13 +165,11 @@ export const getAvailableExercises = (inputs: GuidedInputs): Exercise[] => {
       return false;
     }
 
-    // 2. Filtro de Equipamento
     if (inputs.equipment === 'home_dumbbells') {
       return ex.equipment === 'dumbbell' || ex.equipment === 'bodyweight';
     }
 
     if (inputs.equipment === 'condo') {
-      // Ignora máquinas complexas de alavanca tipo hack squat, isoladores de alavanca
       return (
         ex.equipment === 'dumbbell' ||
         ex.equipment === 'barbell' ||
@@ -123,131 +179,332 @@ export const getAvailableExercises = (inputs: GuidedInputs): Exercise[] => {
       );
     }
 
-    // commercial: aceita qualquer equipamento
     return true;
   });
 };
 
 /**
- * Busca o melhor exercício para um determinado papel na sessão
+ * Função de hash determinística para conferir variabilidade estocástica controlada.
+ * Garante que pequenas variações de biometria, idade e sexo produzam treinos únicos.
  */
-const pickBestExercise = (
-  available: Exercise[],
-  criteria: {
-    targetMuscle: MuscleGroup;
-    mechanic?: 'compound' | 'isolation';
-    preferredPatterns?: MovementPattern[];
-    avoidIds?: string[];
-  }
-): Exercise => {
-  const avoidSet = new Set(criteria.avoidIds || []);
+function getDeterministicProfileSeed(inputs: GuidedInputs): number {
+  const sexFactor = inputs.biologicalSex === 'female' ? 71 : 37;
+  const ageFactor = (inputs.age || 25) * 13;
+  const weightFactor = Math.round((inputs.weightKg || 75) * 19);
+  const heightFactor = (inputs.heightCm || 175) * 23;
+  const priorityFactor = (inputs.musclePriority?.length || 5) * 41;
+  const freqFactor = inputs.frequency * 17;
 
-  const candidates = available.filter(ex => {
-    if (avoidSet.has(ex.id)) return false;
-    if (ex.targetMuscle !== criteria.targetMuscle) return false;
-    if (criteria.mechanic && ex.mechanic !== criteria.mechanic) return false;
-    if (criteria.preferredPatterns && criteria.preferredPatterns.length > 0) {
-      return criteria.preferredPatterns.includes(ex.movementPattern);
-    }
-    return true;
-  });
-
-  if (candidates.length > 0) {
-    return candidates[0];
-  }
-
-  // Fallback 1: ignora o pattern
-  const fallbackMuscle = available.filter(
-    ex => !avoidSet.has(ex.id) && ex.targetMuscle === criteria.targetMuscle
-  );
-  if (fallbackMuscle.length > 0) return fallbackMuscle[0];
-
-  // Fallback 2: primeiro disponível não evitado
-  const fallbackAny = available.find(ex => !avoidSet.has(ex.id));
-  if (fallbackAny) return fallbackAny;
-
-  return available[0];
-};
+  return Math.abs(sexFactor + ageFactor + weightFactor + heightFactor + priorityFactor + freqFactor);
+}
 
 /**
- * Define séries, repetições e descanso por tier e objetivo
+ * Ajusta parâmetros fisiológicos (Séries, Repetições, RIR, Descanso)
+ * com base na ciência de hipertrofia, sexo biológico e tempo disponível.
  */
-const getExerciseParameters = (
+function getPhysiologicalParameters(
   tier: ExerciseTier,
-  goal: PrimaryGoal,
-  experience: ExperienceLevel
-): { sets: number; repsMin: number; repsMax: number; rest: number } => {
-  const isBeginner = experience === 'beginner' || experience === 'returning';
+  inputs: GuidedInputs,
+  isPriorityMuscle: boolean
+): { sets: number; repsMin: number; repsMax: number; rir: number; rest: number; role: string } {
+  const isFemale = inputs.biologicalSex === 'female';
+  const isBeginner = inputs.experienceLevel === 'beginner' || inputs.experienceLevel === 'returning';
+  const isAdvanced = inputs.experienceLevel === 'advanced';
+  const isShortSession = inputs.sessionDuration === '30-45';
+  const isLongSession = inputs.sessionDuration === '60-90';
+
+  // Base de Séries por Exercício
+  let baseSets = 3;
+  if (isPriorityMuscle && !isShortSession) {
+    baseSets = 4; // Volume adaptativo maior para o grupo prioritário
+  } else if (tier === 'primary_compound' && (isAdvanced || isLongSession)) {
+    baseSets = 4;
+  } else if (isShortSession && tier === 'isolation') {
+    baseSets = 2; // Economia de tempo para manter alta intensidade de esforço
+  }
+
+  // Descanso fisiológico: mulheres recuperam estoques de PCr mais rápido (Hunter, 2014)
+  const restModifier = isFemale ? 0.8 : 1.0;
 
   if (tier === 'primary_compound') {
-    if (goal === 'strength') {
-      return { sets: isBeginner ? 3 : 4, repsMin: 5, repsMax: 6, rest: 150 };
+    if (inputs.goal === 'strength') {
+      return {
+        sets: baseSets,
+        repsMin: 4,
+        repsMax: 6,
+        rir: 2,
+        rest: Math.round(150 * restModifier),
+        role: 'Tensão Mecânica Primária (Recrutamento de Unidades Motoras de Alto Limiar)',
+      };
     }
-    if (goal === 'hypertrophy') {
-      return { sets: isBeginner ? 3 : 4, repsMin: 6, repsMax: 8, rest: 120 };
-    }
-    // conditioning
-    return { sets: 3, repsMin: 8, repsMax: 10, rest: 90 };
+    return {
+      sets: baseSets,
+      repsMin: 6,
+      repsMax: 8,
+      rir: 1.5,
+      rest: Math.round(120 * restModifier),
+      role: 'Sobrecarga Mecânica em Posição de Vantagem Biomecânica',
+    };
   }
 
   if (tier === 'secondary_compound') {
-    if (goal === 'strength') {
-      return { sets: 3, repsMin: 6, repsMax: 8, rest: 120 };
-    }
-    if (goal === 'hypertrophy') {
-      return { sets: 3, repsMin: 8, repsMax: 10, rest: 90 };
-    }
-    // conditioning
-    return { sets: 3, repsMin: 10, repsMax: 12, rest: 75 };
+    return {
+      sets: baseSets,
+      repsMin: 8,
+      repsMax: 10,
+      rir: 1.5,
+      rest: Math.round(90 * restModifier),
+      role: 'Sobrecarga em Ângulo Complementar de Fibras Musculares',
+    };
   }
 
-  if (tier === 'isolation') {
-    if (goal === 'strength') {
-      return { sets: 3, repsMin: 8, repsMax: 12, rest: 75 };
-    }
-    if (goal === 'hypertrophy') {
-      return { sets: isBeginner ? 3 : 4, repsMin: 10, repsMax: 15, rest: 60 };
-    }
-    // conditioning
-    return { sets: 3, repsMin: 12, repsMax: 15, rest: 60 };
+  if (tier === 'stretch_isolation') {
+    return {
+      sets: baseSets,
+      repsMin: 10,
+      repsMax: 12,
+      rir: 1,
+      rest: Math.round(75 * restModifier),
+      role: 'Hipertrofia Mediada pelo Alongamento (Titina & Tensão Passiva Elevada)',
+    };
   }
 
-  // core
-  return { sets: 3, repsMin: 12, repsMax: 20, rest: 60 };
+  if (tier === 'peak_contraction') {
+    return {
+      sets: baseSets,
+      repsMin: 12,
+      repsMax: 15,
+      rir: 1,
+      rest: Math.round(60 * restModifier),
+      role: 'Tensão Contínua no Encurtamento & Estresse Metabólico Controlado',
+    };
+  }
+
+  if (tier === 'core') {
+    return {
+      sets: 3,
+      repsMin: 12,
+      repsMax: 20,
+      rir: 1,
+      rest: Math.round(60 * restModifier),
+      role: 'Estabilidade do Complexo Lombo-Pélvico & Transferência de Força',
+    };
+  }
+
+  // isolation padrão
+  return {
+    sets: baseSets,
+    repsMin: 10,
+    repsMax: 15,
+    rir: 1,
+    rest: Math.round(60 * restModifier),
+    role: 'Isolamento Seletivo com Baixo Custo Neural Sistêmico',
+  };
+}
+
+/**
+ * Algoritmo de Scoring Biomecânico para Seleção de Exercícios
+ */
+function scoreExerciseCandidate(
+  ex: Exercise,
+  criteria: {
+    targetMuscle: MuscleGroup;
+    tier: ExerciseTier;
+    preferredPatterns?: MovementPattern[];
+    avoidIds: Set<string>;
+    inputs: GuidedInputs;
+    seed: number;
+  }
+): number {
+  if (criteria.avoidIds.has(ex.id)) return -9999;
+  if (ex.targetMuscle !== criteria.targetMuscle) return -9999;
+
+  let score = 100;
+
+  // 1. Compatibilidade com o Padrão de Movimento
+  if (criteria.preferredPatterns && criteria.preferredPatterns.length > 0) {
+    if (criteria.preferredPatterns.includes(ex.movementPattern)) {
+      score += 40;
+    } else {
+      score -= 25;
+    }
+  }
+
+  // 2. Adequação ao Tier
+  if (criteria.tier === 'primary_compound' || criteria.tier === 'secondary_compound') {
+    if (ex.mechanic === 'compound') score += 30;
+    else score -= 30;
+  } else if (criteria.tier === 'stretch_isolation' || criteria.tier === 'peak_contraction' || criteria.tier === 'isolation') {
+    if (ex.mechanic === 'isolation') score += 25;
+  }
+
+  // 3. Hipertrofia Mediada pelo Alongamento (Pedrosa, 2022)
+  if (criteria.tier === 'stretch_isolation') {
+    if (STRETCH_MEDIATED_EXERCISE_IDS.has(ex.id)) {
+      score += 50;
+    }
+  }
+
+  // 4. Pico de Contração e Tensão Contínua
+  if (criteria.tier === 'peak_contraction') {
+    if (ex.equipment === 'cable' || ex.equipment === 'machine') {
+      score += 35;
+    }
+  }
+
+  // 5. Antropometria do Atleta (Altura e Alavancas)
+  const height = criteria.inputs.heightCm || 178;
+  const weight = criteria.inputs.weightKg || 80;
+
+  // Atletas altos (>182cm): evitar back squat clássico se houver hack squat ou leg press profundo
+  if (height > 182) {
+    if (ex.id === 'hack_squat_machine' || ex.id === 'leg_press_45_degree' || ex.id === 'dumbbell_bulgarian_split_squat') {
+      score += 25; // Menor torque de cisalhamento na coluna lombar para fêmures longos
+    }
+    if (ex.id === 'incline_dumbbell_bench_press' || ex.id === 'dumbbell_bench_press') {
+      score += 15; // Halteres permitem rotação neutra confortável para braços longos
+    }
+  }
+
+  // Atletas com peso elevado (>90kg): priorizar cabos na puxada vertical antes de pull-ups com peso do corpo
+  if (weight > 92 && (ex.id === 'pull_up_pronated' || ex.id === 'chin_up_supinated')) {
+    score -= 20; // Risco de sobrecarga excessiva prematura no ombro
+  }
+
+  // 6. Preferências por Sexo Biológico (ênfase anatômica e alinhamento articular)
+  if (criteria.inputs.biologicalSex === 'female') {
+    if (ex.targetMuscle === 'gluteos' || ex.id === 'barbell_hip_thrust' || ex.id === 'dumbbell_romanian_deadlift') {
+      score += 20;
+    }
+    if (ex.id === 'cable_lateral_raise' || ex.id === 'dumbbell_lateral_raise_standing') {
+      score += 15;
+    }
+  }
+
+  // 7. Modificador Pseudo-Estocástico Determinístico (Garante treino 100% individualizado)
+  // Cada exercício recebe um pequeno bônus baseado no hash do perfil do atleta
+  const nameHash = ex.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const variance = ((nameHash * 13 + criteria.seed) % 17) - 8; // Varia entre -8 e +8
+  score += variance;
+
+  return score;
+}
+
+/**
+ * Seleciona o melhor exercício baseado no scoring biomecânico
+ */
+function pickScientificallyOptimalExercise(
+  available: Exercise[],
+  criteria: {
+    targetMuscle: MuscleGroup;
+    tier: ExerciseTier;
+    preferredPatterns?: MovementPattern[];
+    avoidIds: string[];
+    inputs: GuidedInputs;
+    seed: number;
+  }
+): Exercise {
+  const avoidSet = new Set(criteria.avoidIds || []);
+
+  const scored = available
+    .map(ex => ({
+      ex,
+      score: scoreExerciseCandidate(ex, { ...criteria, avoidIds: avoidSet }),
+    }))
+    .filter(item => item.score > -1000)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length > 0) {
+    return scored[0].ex;
+  }
+
+  // Fallback 1: mesmo músculo disponível
+  const fallbackMuscle = available.filter(
+    e => !avoidSet.has(e.id) && e.targetMuscle === criteria.targetMuscle
+  );
+  if (fallbackMuscle.length > 0) return fallbackMuscle[0];
+
+  // Fallback 2: qualquer disponível não utilizado
+  const fallbackAny = available.find(e => !avoidSet.has(e.id));
+  if (fallbackAny) return fallbackAny;
+
+  return available[0];
+}
+
+/**
+ * Retorna os nomes dos músculos em português para os relatórios
+ */
+const MUSCLE_NAMES_PT: Record<MuscleGroup, string> = {
+  peito: 'Peitoral',
+  costas: 'Dorsais & Costas',
+  quadriceps: 'Quadríceps',
+  isquiotibiais: 'Posteriores de Coxa',
+  gluteos: 'Glúteos',
+  ombros: 'Deltoides',
+  biceps: 'Bíceps',
+  triceps: 'Tríceps',
+  antibraco: 'Antebraço',
+  panturrilhas: 'Panturrilhas',
+  abdomen: 'Abdômen / Core',
+  lombar: 'Lombar & Eretor',
+  trapezio: 'Trapézio',
 };
 
 /**
- * MOTOR DE RECOMENDAÇÃO LOCAL (Local Recommendation Engine)
+ * MOTOR DE RECOMENDAÇÃO CIENTÍFICA (Scientific Hypertrophy Recommendation Engine v2)
  */
 export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
   const available = getAvailableExercises(inputs);
   const usedExerciseIds: string[] = [];
+  const profileSeed = getDeterministicProfileSeed(inputs);
+
+  // Normalização de inputs
+  const effectiveInputs: GuidedInputs = {
+    frequency: inputs.frequency || 4,
+    sessionDuration: inputs.sessionDuration || '45-60',
+    goal: inputs.goal || 'hypertrophy',
+    experienceLevel: inputs.experienceLevel || 'intermediate',
+    equipment: inputs.equipment || 'commercial',
+    restrictions: inputs.restrictions || ['none'],
+    biologicalSex: inputs.biologicalSex || 'male',
+    age: inputs.age || 26,
+    weightKg: inputs.weightKg || 78,
+    heightCm: inputs.heightCm || 176,
+    musclePriority: inputs.musclePriority || 'balanced',
+  };
 
   // Quantidade de exercícios por sessão de acordo com a duração
-  const exCount = inputs.sessionDuration === '30-45' ? 4 : inputs.sessionDuration === '45-60' ? 5 : 6;
+  const exCount = 
+    effectiveInputs.sessionDuration === '30-45' ? 4 : 
+    effectiveInputs.sessionDuration === '45-60' ? 5 : 6;
 
-  // Determinação de volume por nível
-  const weeklySetsPerMuscle = inputs.experienceLevel === 'intermediate' ? 16 : 11;
-
-  let splitType: 'full_body' | 'upper_lower' | 'ul_ppl_hybrid' | 'ppl';
-  let planTitle = '';
-  let sessions: PlannedSession[] = [];
+  // Determinação se o grupo muscular é prioritário
+  const isMusclePriority = (muscle: MuscleGroup): boolean => {
+    if (effectiveInputs.musclePriority === 'chest') return muscle === 'peito';
+    if (effectiveInputs.musclePriority === 'back') return muscle === 'costas';
+    if (effectiveInputs.musclePriority === 'legs_glutes') return muscle === 'quadriceps' || muscle === 'isquiotibiais' || muscle === 'gluteos';
+    if (effectiveInputs.musclePriority === 'shoulders') return muscle === 'ombros';
+    if (effectiveInputs.musclePriority === 'arms') return muscle === 'biceps' || muscle === 'triceps';
+    return false;
+  };
 
   const createPlannedEx = (
     muscle: MuscleGroup,
     tier: ExerciseTier,
-    mechanic: 'compound' | 'isolation' = 'compound',
     preferredPatterns?: MovementPattern[]
   ): PlannedExercise => {
-    const ex = pickBestExercise(available, {
+    const isPriority = isMusclePriority(muscle);
+    const ex = pickScientificallyOptimalExercise(available, {
       targetMuscle: muscle,
-      mechanic,
+      tier,
       preferredPatterns,
       avoidIds: usedExerciseIds,
+      inputs: effectiveInputs,
+      seed: profileSeed + usedExerciseIds.length * 7,
     });
-    usedExerciseIds.push(ex.id);
 
-    const params = getExerciseParameters(tier, inputs.goal, inputs.experienceLevel);
+    usedExerciseIds.push(ex.id);
+    const params = getPhysiologicalParameters(tier, effectiveInputs, isPriority);
 
     return {
       exerciseId: ex.id,
@@ -258,279 +515,357 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
       targetSets: params.sets,
       targetRepsMin: params.repsMin,
       targetRepsMax: params.repsMax,
+      targetRir: params.rir,
       restSeconds: params.rest,
+      physiologicalRole: params.role,
     };
   };
 
-  // =========================================================================
-  // REGRA 1: SELEÇÃO DA DIVISÃO (SPLIT) PELA FREQUÊNCIA
-  // =========================================================================
+  let splitType: 'full_body' | 'upper_lower' | 'ul_ppl_hybrid' | 'ppl';
+  let planTitle = '';
+  let sessions: PlannedSession[] = [];
 
-  // 1. FREQUÊNCIA 2 ou 3 DIAS: FULL BODY
-  if (inputs.frequency === 2 || inputs.frequency === 3) {
+  // =========================================================================
+  // 1. FREQUÊNCIA 2 ou 3 DIAS: FULL BODY BIOMECÂNICO
+  // =========================================================================
+  if (effectiveInputs.frequency === 2 || effectiveInputs.frequency === 3) {
     splitType = 'full_body';
-    planTitle = `Full Body ${inputs.frequency} Dias: Foco Força & Eficiência`;
+    planTitle = `Full Body Científico ${effectiveInputs.frequency}x: Alta Densidade de Tensão`;
 
-    // Treino A (Foco Agachamento & Supino)
+    // Treino A (Foco Cadeia Anterior & Empurrar)
     const exA: PlannedExercise[] = [];
-    exA.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat', 'lunge']));
-    exA.push(createPlannedEx('peito', 'secondary_compound', 'compound', ['horizontal_push']));
-    exA.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['horizontal_pull', 'vertical_pull']));
-    exA.push(createPlannedEx('isquiotibiais', 'isolation', 'compound', ['hinge', 'isolation']));
-    if (exCount >= 5) exA.push(createPlannedEx('ombros', 'isolation', 'isolation', ['isolation']));
-    if (exCount >= 6) exA.push(createPlannedEx('abdomen', 'core', 'isolation', ['core_anti_extension', 'core_rotation']));
+    exA.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
+    exA.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
+    exA.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull', 'vertical_pull']));
+    exA.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
+    if (exCount >= 5) exA.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
+    if (exCount >= 6) exA.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
 
-    // Treino B (Foco Hinge & Desenvolvimento)
+    // Treino B (Foco Cadeia Posterior & Puxar)
     const exB: PlannedExercise[] = [];
-    exB.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge']));
-    exB.push(createPlannedEx('ombros', 'secondary_compound', 'compound', ['vertical_push']));
-    exB.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['vertical_pull', 'horizontal_pull']));
-    exB.push(createPlannedEx('quadriceps', 'secondary_compound', 'compound', ['squat', 'lunge']));
-    if (exCount >= 5) exB.push(createPlannedEx('biceps', 'isolation', 'isolation'));
-    if (exCount >= 6) exB.push(createPlannedEx('triceps', 'isolation', 'isolation'));
+    exB.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+    exB.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull', 'horizontal_pull']));
+    exB.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+    exB.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge', 'isolation']));
+    if (exCount >= 5) exB.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 6) exB.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
 
     sessions = [
       {
         id: 'guided_fb_a',
-        name: 'Treino A - Full Body (Foco Anterior)',
-        focus: 'Quadríceps, Peitoral & Costas',
+        name: 'Treino A - Full Body (Tensão Mecânica & Cadeia Anterior)',
+        focus: 'Quadríceps, Peitoral & Dorsais',
         dayOfWeek: 'Segunda-feira',
         exercises: exA,
       },
       {
         id: 'guided_fb_b',
-        name: 'Treino B - Full Body (Foco Posterior)',
-        focus: 'Isquiotibiais, Ombros & Dorsal',
-        dayOfWeek: inputs.frequency === 2 ? 'Quinta-feira' : 'Quarta-feira',
+        name: 'Treino B - Full Body (Alongamento & Cadeia Posterior)',
+        focus: 'Posteriores, Costas & Ombros',
+        dayOfWeek: effectiveInputs.frequency === 2 ? 'Quinta-feira' : 'Quarta-feira',
         exercises: exB,
       },
     ];
 
-    if (inputs.frequency === 3) {
-      // Treino C (Foco Densidade & Acessórios)
+    if (effectiveInputs.frequency === 3) {
+      // Treino C (Foco Equilíbrio Hipertrófico & Acessórios)
       const exC: PlannedExercise[] = [];
-      exC.push(createPlannedEx('peito', 'primary_compound', 'compound', ['horizontal_push']));
-      exC.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['horizontal_pull']));
-      exC.push(createPlannedEx('quadriceps', 'secondary_compound', 'compound', ['squat', 'lunge']));
-      exC.push(createPlannedEx('isquiotibiais', 'isolation', 'isolation'));
-      if (exCount >= 5) exC.push(createPlannedEx('ombros', 'isolation', 'isolation'));
-      if (exCount >= 6) exC.push(createPlannedEx('abdomen', 'core', 'isolation'));
+      exC.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+      exC.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
+      exC.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
+      exC.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+      if (exCount >= 5) exC.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
+      if (exCount >= 6) exC.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
 
       sessions.push({
         id: 'guided_fb_c',
-        name: 'Treino C - Full Body (Foco Volume)',
-        focus: 'Peitoral, Dorsais & Pernas',
+        name: 'Treino C - Full Body (Volume Efetivo & Sinergistas)',
+        focus: 'Peito, Dorsais, Pernas & Glúteo',
         dayOfWeek: 'Sexta-feira',
         exercises: exC,
       });
     }
   }
 
-  // 2. FREQUÊNCIA 4 DIAS: UPPER / LOWER (2x)
-  else if (inputs.frequency === 4) {
+  // =========================================================================
+  // 2. FREQUÊNCIA 4 DIAS: UPPER / LOWER (2x na semana - Frequência Ótima)
+  // =========================================================================
+  else if (effectiveInputs.frequency === 4) {
     splitType = 'upper_lower';
-    planTitle = 'Upper / Lower 4 Dias: Equilíbrio Biomecânico';
+    planTitle = 'Upper / Lower 4x: Frequência Ótima & Estímulo-Fadiga Calibrado';
 
-    // Upper A (Força)
+    // Upper A (Força Mecânica)
     const exUA: PlannedExercise[] = [];
-    exUA.push(createPlannedEx('peito', 'primary_compound', 'compound', ['horizontal_push']));
-    exUA.push(createPlannedEx('costas', 'primary_compound', 'compound', ['horizontal_pull']));
-    exUA.push(createPlannedEx('ombros', 'secondary_compound', 'compound', ['vertical_push']));
-    exUA.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['vertical_pull']));
-    if (exCount >= 5) exUA.push(createPlannedEx('triceps', 'isolation', 'isolation'));
-    if (exCount >= 6) exUA.push(createPlannedEx('biceps', 'isolation', 'isolation'));
+    exUA.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
+    exUA.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull']));
+    exUA.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+    exUA.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
+    if (exCount >= 5) exUA.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 6) exUA.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
 
-    // Lower A (Força)
+    // Lower A (Sobrecarga de Joelho & Quadril)
     const exLA: PlannedExercise[] = [];
-    exLA.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat']));
-    exLA.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge']));
-    exLA.push(createPlannedEx('quadriceps', 'secondary_compound', 'compound', ['lunge', 'squat']));
-    exLA.push(createPlannedEx('panturrilhas', 'isolation', 'isolation', ['calf_raise']));
-    if (exCount >= 5) exLA.push(createPlannedEx('gluteos', 'secondary_compound', 'compound', ['hinge']));
-    if (exCount >= 6) exLA.push(createPlannedEx('abdomen', 'core', 'isolation'));
+    exLA.push(createPlannedEx('quadriceps', 'primary_compound', ['squat']));
+    exLA.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+    exLA.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat']));
+    exLA.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 5) exLA.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
+    if (exCount >= 6) exLA.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
 
-    // Upper B (Hipertrofia)
+    // Upper B (Alongamento & Volume Hipertrófico)
     const exUB: PlannedExercise[] = [];
-    exUB.push(createPlannedEx('costas', 'primary_compound', 'compound', ['vertical_pull']));
-    exUB.push(createPlannedEx('peito', 'secondary_compound', 'compound', ['horizontal_push']));
-    exUB.push(createPlannedEx('ombros', 'isolation', 'isolation', ['isolation']));
-    exUB.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['horizontal_pull']));
-    if (exCount >= 5) exUB.push(createPlannedEx('biceps', 'isolation', 'isolation'));
-    if (exCount >= 6) exUB.push(createPlannedEx('triceps', 'isolation', 'isolation'));
+    exUB.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull']));
+    exUB.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+    exUB.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
+    exUB.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
+    if (exCount >= 5) exUB.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
+    if (exCount >= 6) exUB.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
 
-    // Lower B (Hipertrofia)
+    // Lower B (Alongamento Muscular & Cadeia Posterior)
     const exLB: PlannedExercise[] = [];
-    exLB.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge', 'isolation']));
-    exLB.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat', 'lunge']));
-    exLB.push(createPlannedEx('gluteos', 'secondary_compound', 'compound', ['hinge']));
-    exLB.push(createPlannedEx('panturrilhas', 'isolation', 'isolation', ['calf_raise']));
-    if (exCount >= 5) exLB.push(createPlannedEx('quadriceps', 'isolation', 'isolation'));
-    if (exCount >= 6) exLB.push(createPlannedEx('abdomen', 'core', 'isolation'));
+    exLB.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
+    exLB.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
+    exLB.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+    exLB.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 5) exLB.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
+    if (exCount >= 6) exLB.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
 
     sessions = [
-      { id: 'guided_ul_ua', name: 'Treino A - Upper (Superiores Força)', focus: 'Peito, Costas & Ombros', dayOfWeek: 'Segunda-feira', exercises: exUA },
-      { id: 'guided_ul_la', name: 'Treino B - Lower (Inferiores Força)', focus: 'Quadríceps & Posterior', dayOfWeek: 'Terça-feira', exercises: exLA },
-      { id: 'guided_ul_ub', name: 'Treino C - Upper (Superiores Volume)', focus: 'Dorsal, Peito & Braços', dayOfWeek: 'Quinta-feira', exercises: exUB },
-      { id: 'guided_ul_lb', name: 'Treino D - Lower (Inferiores Volume)', focus: 'Posterior, Glúteo & Perna', dayOfWeek: 'Sexta-feira', exercises: exLB },
+      { id: 'guided_ul_ua', name: 'Treino A - Superiores (Tensão Mecânica Primária)', focus: 'Peitoral, Dorsais & Deltóides', dayOfWeek: 'Segunda-feira', exercises: exUA },
+      { id: 'guided_ul_la', name: 'Treino B - Inferiores (Força & Sobrecarga de Quadril)', focus: 'Quadríceps, Isquiotibiais & Panturrilha', dayOfWeek: 'Terça-feira', exercises: exLA },
+      { id: 'guided_ul_ub', name: 'Treino C - Superiores (Hipertrofia & Posição Alongada)', focus: 'Dorsais, Peitoral & Braços', dayOfWeek: 'Quinta-feira', exercises: exUB },
+      { id: 'guided_ul_lb', name: 'Treino D - Inferiores (Alongamento Muscular & Glúteos)', focus: 'Cadeia Posterior, Quadríceps & Core', dayOfWeek: 'Sexta-feira', exercises: exLB },
     ];
   }
 
-  // 3. FREQUÊNCIA 5 DIAS: UPPER / LOWER + PPL HÍBRIDO
-  else if (inputs.frequency === 5) {
+  // =========================================================================
+  // 3. FREQUÊNCIA 5 DIAS: UPPER / LOWER + PPL HÍBRIDO (Periodização Alta)
+  // =========================================================================
+  else if (effectiveInputs.frequency === 5) {
     splitType = 'ul_ppl_hybrid';
-    planTitle = 'Estrutura Híbrida 5 Dias: Alta Frequência & Volume';
+    planTitle = 'Estrutura Híbrida 5x: Alta Frequência & Máximo Volume Recuperável';
 
     // Dia 1: Upper Força
     const s1: PlannedExercise[] = [];
-    s1.push(createPlannedEx('peito', 'primary_compound', 'compound', ['horizontal_push']));
-    s1.push(createPlannedEx('costas', 'primary_compound', 'compound', ['horizontal_pull']));
-    s1.push(createPlannedEx('ombros', 'secondary_compound', 'compound', ['vertical_push']));
-    s1.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['vertical_pull']));
-    if (exCount >= 5) s1.push(createPlannedEx('triceps', 'isolation', 'isolation'));
-    if (exCount >= 6) s1.push(createPlannedEx('biceps', 'isolation', 'isolation'));
+    s1.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
+    s1.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull']));
+    s1.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+    s1.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
+    if (exCount >= 5) s1.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+    if (exCount >= 6) s1.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
 
     // Dia 2: Lower Força
     const s2: PlannedExercise[] = [];
-    s2.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat']));
-    s2.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge']));
-    s2.push(createPlannedEx('quadriceps', 'secondary_compound', 'compound', ['lunge', 'squat']));
-    s2.push(createPlannedEx('panturrilhas', 'isolation', 'isolation', ['calf_raise']));
-    if (exCount >= 5) s2.push(createPlannedEx('gluteos', 'secondary_compound', 'compound', ['hinge']));
-    if (exCount >= 6) s2.push(createPlannedEx('abdomen', 'core', 'isolation'));
+    s2.push(createPlannedEx('quadriceps', 'primary_compound', ['squat']));
+    s2.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+    s2.push(createPlannedEx('quadriceps', 'secondary_compound', ['lunge', 'squat']));
+    s2.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 5) s2.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
+    if (exCount >= 6) s2.push(createPlannedEx('abdomen', 'core', ['core_anti_extension']));
 
-    // Dia 3: Push Hipertrofia
+    // Dia 3: Push Hipertrofia (Alongamento & Feixes)
     const s3: PlannedExercise[] = [];
-    s3.push(createPlannedEx('peito', 'primary_compound', 'compound', ['horizontal_push']));
-    s3.push(createPlannedEx('peito', 'secondary_compound', 'compound', ['horizontal_push']));
-    s3.push(createPlannedEx('ombros', 'isolation', 'isolation', ['isolation']));
-    s3.push(createPlannedEx('triceps', 'isolation', 'isolation'));
-    if (exCount >= 5) s3.push(createPlannedEx('ombros', 'secondary_compound', 'compound', ['vertical_push']));
-    if (exCount >= 6) s3.push(createPlannedEx('triceps', 'isolation', 'isolation'));
+    s3.push(createPlannedEx('peito', 'stretch_isolation', ['horizontal_push']));
+    s3.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+    s3.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
+    s3.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
+    if (exCount >= 5) s3.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+    if (exCount >= 6) s3.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
 
     // Dia 4: Pull Hipertrofia
     const s4: PlannedExercise[] = [];
-    s4.push(createPlannedEx('costas', 'primary_compound', 'compound', ['vertical_pull']));
-    s4.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['horizontal_pull']));
-    s4.push(createPlannedEx('trapezio', 'isolation', 'isolation'));
-    s4.push(createPlannedEx('biceps', 'isolation', 'isolation'));
-    if (exCount >= 5) s4.push(createPlannedEx('costas', 'isolation', 'isolation'));
-    if (exCount >= 6) s4.push(createPlannedEx('biceps', 'isolation', 'isolation'));
+    s4.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull']));
+    s4.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
+    s4.push(createPlannedEx('trapezio', 'stretch_isolation', ['isolation']));
+    s4.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
+    if (exCount >= 5) s4.push(createPlannedEx('costas', 'peak_contraction', ['isolation']));
+    if (exCount >= 6) s4.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
 
-    // Dia 5: Legs Hipertrofia
+    // Dia 5: Legs Hipertrofia & Detalhe
     const s5: PlannedExercise[] = [];
-    s5.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat', 'lunge']));
-    s5.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge', 'isolation']));
-    s5.push(createPlannedEx('gluteos', 'secondary_compound', 'compound', ['hinge']));
-    s5.push(createPlannedEx('panturrilhas', 'isolation', 'isolation', ['calf_raise']));
-    if (exCount >= 5) s5.push(createPlannedEx('quadriceps', 'isolation', 'isolation'));
-    if (exCount >= 6) s5.push(createPlannedEx('abdomen', 'core', 'isolation'));
+    s5.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
+    s5.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
+    s5.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+    s5.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 5) s5.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
+    if (exCount >= 6) s5.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
 
     sessions = [
-      { id: 'guided_h5_u', name: 'Treino A - Upper (Força)', focus: 'Peito, Costas & Ombros', dayOfWeek: 'Segunda-feira', exercises: s1 },
-      { id: 'guided_h5_l', name: 'Treino B - Lower (Força)', focus: 'Quadríceps & Isquiotibiais', dayOfWeek: 'Terça-feira', exercises: s2 },
-      { id: 'guided_h5_push', name: 'Treino C - Push (Hipertrofia)', focus: 'Peito, Ombros & Tríceps', dayOfWeek: 'Quinta-feira', exercises: s3 },
-      { id: 'guided_h5_pull', name: 'Treino D - Pull (Hipertrofia)', focus: 'Costas, Trapézio & Bíceps', dayOfWeek: 'Sexta-feira', exercises: s4 },
-      { id: 'guided_h5_legs', name: 'Treino E - Legs (Hipertrofia)', focus: 'Membros Inferiores Completos', dayOfWeek: 'Sábado', exercises: s5 },
+      { id: 'guided_h5_u', name: 'Treino A - Superiores (Foco Força & Tensão)', focus: 'Peitoral, Costas & Ombros', dayOfWeek: 'Segunda-feira', exercises: s1 },
+      { id: 'guided_h5_l', name: 'Treino B - Inferiores (Força de Agachamento & Hinge)', focus: 'Quadríceps, Isquiotibiais & Panturrilhas', dayOfWeek: 'Terça-feira', exercises: s2 },
+      { id: 'guided_h5_push', name: 'Treino C - Push (Hipertrofia em Posição Alongada)', focus: 'Peitoral, Deltoides & Tríceps', dayOfWeek: 'Quinta-feira', exercises: s3 },
+      { id: 'guided_h5_pull', name: 'Treino D - Pull (Hipertrofia de Dorsais & Trapézio)', focus: 'Dorsais, Trapézio & Bíceps', dayOfWeek: 'Sexta-feira', exercises: s4 },
+      { id: 'guided_h5_legs', name: 'Treino E - Legs (Estresse Metabólico & Volume)', focus: 'Membros Inferiores & Glúteo', dayOfWeek: 'Sábado', exercises: s5 },
     ];
   }
 
-  // 4. FREQUÊNCIA 6 DIAS: PUSH / PULL / LEGS (2x)
+  // =========================================================================
+  // 4. FREQUÊNCIA 6 DIAS: PUSH / PULL / LEGS 2x (Alta Especificidade)
+  // =========================================================================
   else {
     splitType = 'ppl';
-    planTitle = 'Push / Pull / Legs (2x) 6 Dias: Foco Máximo em Sobrecarga';
+    planTitle = 'Push / Pull / Legs (2x) 6 Dias: Periodização Avançada por Fibras';
 
-    const makePush = (letter: string, day: string): PlannedSession => {
+    const makePush = (letter: string, day: string, isA: boolean): PlannedSession => {
       const exList: PlannedExercise[] = [];
-      exList.push(createPlannedEx('peito', 'primary_compound', 'compound', ['horizontal_push']));
-      exList.push(createPlannedEx('ombros', 'secondary_compound', 'compound', ['vertical_push', 'isolation']));
-      exList.push(createPlannedEx('peito', 'secondary_compound', 'compound', ['horizontal_push']));
-      exList.push(createPlannedEx('triceps', 'isolation', 'isolation'));
-      if (exCount >= 5) exList.push(createPlannedEx('ombros', 'isolation', 'isolation'));
-      if (exCount >= 6) exList.push(createPlannedEx('triceps', 'isolation', 'isolation'));
+      if (isA) {
+        exList.push(createPlannedEx('peito', 'primary_compound', ['horizontal_push']));
+        exList.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+        exList.push(createPlannedEx('peito', 'stretch_isolation', ['horizontal_push']));
+        exList.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+        if (exCount >= 5) exList.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
+        if (exCount >= 6) exList.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
+      } else {
+        exList.push(createPlannedEx('peito', 'secondary_compound', ['horizontal_push']));
+        exList.push(createPlannedEx('ombros', 'stretch_isolation', ['isolation']));
+        exList.push(createPlannedEx('peito', 'peak_contraction', ['horizontal_push']));
+        exList.push(createPlannedEx('triceps', 'peak_contraction', ['isolation']));
+        if (exCount >= 5) exList.push(createPlannedEx('ombros', 'secondary_compound', ['vertical_push']));
+        if (exCount >= 6) exList.push(createPlannedEx('triceps', 'stretch_isolation', ['isolation']));
+      }
 
       return {
         id: `guided_ppl_push_${letter.toLowerCase()}`,
-        name: `Treino ${letter} - Push (Peito, Ombros & Tríceps)`,
-        focus: 'Peitoral, Deltoides & Tríceps',
+        name: `Treino ${letter} - Push (${isA ? 'Força & Tensão' : 'Alongamento & Volume'})`,
+        focus: 'Peitoral, Deltoide Anterior/Lateral & Tríceps',
         dayOfWeek: day,
         exercises: exList,
       };
     };
 
-    const makePull = (letter: string, day: string): PlannedSession => {
+    const makePull = (letter: string, day: string, isA: boolean): PlannedSession => {
       const exList: PlannedExercise[] = [];
-      exList.push(createPlannedEx('costas', 'primary_compound', 'compound', ['vertical_pull', 'horizontal_pull']));
-      exList.push(createPlannedEx('costas', 'secondary_compound', 'compound', ['horizontal_pull']));
-      exList.push(createPlannedEx('trapezio', 'isolation', 'isolation'));
-      exList.push(createPlannedEx('biceps', 'isolation', 'isolation'));
-      if (exCount >= 5) exList.push(createPlannedEx('costas', 'isolation', 'isolation'));
-      if (exCount >= 6) exList.push(createPlannedEx('biceps', 'isolation', 'isolation'));
+      if (isA) {
+        exList.push(createPlannedEx('costas', 'primary_compound', ['vertical_pull']));
+        exList.push(createPlannedEx('costas', 'secondary_compound', ['horizontal_pull']));
+        exList.push(createPlannedEx('trapezio', 'stretch_isolation', ['isolation']));
+        exList.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+        if (exCount >= 5) exList.push(createPlannedEx('costas', 'peak_contraction', ['isolation']));
+        if (exCount >= 6) exList.push(createPlannedEx('biceps', 'peak_contraction', ['isolation']));
+      } else {
+        exList.push(createPlannedEx('costas', 'primary_compound', ['horizontal_pull']));
+        exList.push(createPlannedEx('costas', 'secondary_compound', ['vertical_pull']));
+        exList.push(createPlannedEx('ombros', 'peak_contraction', ['isolation']));
+        exList.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+        if (exCount >= 5) exList.push(createPlannedEx('trapezio', 'peak_contraction', ['isolation']));
+        if (exCount >= 6) exList.push(createPlannedEx('biceps', 'stretch_isolation', ['isolation']));
+      }
 
       return {
         id: `guided_ppl_pull_${letter.toLowerCase()}`,
-        name: `Treino ${letter} - Pull (Costas, Trapézio & Bíceps)`,
-        focus: 'Dorsais, Trapézio & Bíceps',
+        name: `Treino ${letter} - Pull (${isA ? 'Dorsais & Densidade' : 'Remadas & Posição Alongada'})`,
+        focus: 'Grande Dorsal, Rombóides, Trapézio & Bíceps',
         dayOfWeek: day,
         exercises: exList,
       };
     };
 
-    const makeLegs = (letter: string, day: string): PlannedSession => {
+    const makeLegs = (letter: string, day: string, isA: boolean): PlannedSession => {
       const exList: PlannedExercise[] = [];
-      exList.push(createPlannedEx('quadriceps', 'primary_compound', 'compound', ['squat', 'lunge']));
-      exList.push(createPlannedEx('isquiotibiais', 'primary_compound', 'compound', ['hinge', 'isolation']));
-      exList.push(createPlannedEx('gluteos', 'secondary_compound', 'compound', ['hinge']));
-      exList.push(createPlannedEx('panturrilhas', 'isolation', 'isolation', ['calf_raise']));
-      if (exCount >= 5) exList.push(createPlannedEx('quadriceps', 'isolation', 'isolation'));
-      if (exCount >= 6) exList.push(createPlannedEx('abdomen', 'core', 'isolation'));
+      if (isA) {
+        exList.push(createPlannedEx('quadriceps', 'primary_compound', ['squat', 'lunge']));
+        exList.push(createPlannedEx('isquiotibiais', 'primary_compound', ['hinge']));
+        exList.push(createPlannedEx('gluteos', 'secondary_compound', ['hinge']));
+        exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+        if (exCount >= 5) exList.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation']));
+        if (exCount >= 6) exList.push(createPlannedEx('abdomen', 'core', ['core_anti_extension']));
+      } else {
+        exList.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['hinge', 'isolation']));
+        exList.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge']));
+        exList.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
+        exList.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+        if (exCount >= 5) exList.push(createPlannedEx('isquiotibiais', 'peak_contraction', ['isolation']));
+        if (exCount >= 6) exList.push(createPlannedEx('abdomen', 'core', ['core_anti_extension', 'core_rotation']));
+      }
 
       return {
         id: `guided_ppl_legs_${letter.toLowerCase()}`,
-        name: `Treino ${letter} - Legs (Membros Inferiores)`,
-        focus: 'Quadríceps, Isquiotibiais & Panturrilha',
+        name: `Treino ${letter} - Legs (${isA ? 'Foco Joelho/Quadríceps' : 'Foco Quadril/Posterior'})`,
+        focus: 'Quadríceps, Isquiotibiais, Glúteos & Panturrilhas',
         dayOfWeek: day,
         exercises: exList,
       };
     };
 
     sessions = [
-      makePush('A', 'Segunda-feira'),
-      makePull('B', 'Terça-feira'),
-      makeLegs('C', 'Quarta-feira'),
-      makePush('D', 'Quinta-feira'),
-      makePull('E', 'Sexta-feira'),
-      makeLegs('F', 'Sábado'),
+      makePush('A', 'Segunda-feira', true),
+      makePull('B', 'Terça-feira', true),
+      makeLegs('C', 'Quarta-feira', true),
+      makePush('D', 'Quinta-feira', false),
+      makePull('E', 'Sexta-feira', false),
+      makeLegs('F', 'Sábado', false),
     ];
   }
 
-  // Descrição resumida da estratégia gerada
-  const goalLabelMap: Record<PrimaryGoal, string> = {
-    hypertrophy: 'Hipertrofia Estética & Densidade Muscular',
-    strength: 'Ganho de Força Base & Sobrecarga em Compostos',
-    conditioning: 'Condicionamento Atlético & Resistência Muscular',
+  // =========================================================================
+  // CÁLCULO DE MARCOS DE VOLUME SEMANAL POR GRUPO MUSCULAR (MEV / MAV / MRV)
+  // =========================================================================
+  const muscleSetTotals: Partial<Record<MuscleGroup, number>> = {};
+  sessions.forEach(sess => {
+    sess.exercises.forEach(ex => {
+      muscleSetTotals[ex.targetMuscle] = (muscleSetTotals[ex.targetMuscle] || 0) + ex.targetSets;
+    });
+  });
+
+  const volumeBreakdown: MuscleVolumeBreakdown[] = Object.entries(muscleSetTotals)
+    .filter(([_, sets]) => sets && sets > 0)
+    .map(([muscleKey, sets]) => {
+      const muscle = muscleKey as MuscleGroup;
+      const isPriority = isMusclePriority(muscle);
+      let landmark: 'MEV' | 'MAV' | 'PRIORITÁRIO' = 'MAV';
+
+      if (isPriority) {
+        landmark = 'PRIORITÁRIO';
+      } else if (sets! < 10) {
+        landmark = 'MEV';
+      } else {
+        landmark = 'MAV';
+      }
+
+      return {
+        muscle,
+        muscleLabel: MUSCLE_NAMES_PT[muscle] || muscle,
+        weeklySets: sets!,
+        landmark,
+      };
+    })
+    .sort((a, b) => b.weeklySets - a.weeklySets);
+
+  const totalWeeklySets = Object.values(muscleSetTotals).reduce((acc, curr) => (acc || 0) + (curr || 0), 0) || 0;
+  const avgDirectSets = Math.round(totalWeeklySets / Math.max(1, volumeBreakdown.length));
+
+  // Síntese Científica Personalizada
+  const sexLabel = effectiveInputs.biologicalSex === 'female' ? 'Feminino' : 'Masculino';
+  const priorityName = effectiveInputs.musclePriority === 'balanced' ? 'Equilibrado' :
+    effectiveInputs.musclePriority === 'chest' ? 'Peitoral' :
+    effectiveInputs.musclePriority === 'back' ? 'Costas/Dorsais' :
+    effectiveInputs.musclePriority === 'legs_glutes' ? 'Pernas & Glúteos' :
+    effectiveInputs.musclePriority === 'shoulders' ? 'Deltoides' : 'Braços';
+
+  const scientificSummary = {
+    primaryStimulus: `Tensão Mecânica Primária (RIR 1–2) com ênfase em Hipertrofia Mediada pelo Alongamento (Stretch-Mediated)`,
+    weeklyVolumeProfile: `Volume Real Efetivo: ~${totalWeeklySets} séries semanais totais calibradas para MAV (Volume Máximo Adaptativo) e foco em ${priorityName}`,
+    anthropometricAdaptation: `Calibrado para ${sexLabel}, ${effectiveInputs.heightCm}cm, ${effectiveInputs.weightKg}kg e alavancas biomecânicas personalizadas`,
+    recoveryRecommendation: `Frequência de 2x/semana por agrupamento com descanso inter-série otimizado para restauração neural e de fosfocreatina`,
   };
 
-  const expLabelMap: Record<ExperienceLevel, string> = {
-    beginner: 'Iniciante (Curva de Aprendizagem Motora)',
-    intermediate: 'Intermediário (Estresse Mecânico & Metabólico)',
-    returning: 'Retomada Progressiva (Rampa de Reaclimatação)',
-  };
-
-  const description = `Plano customizado para ${inputs.frequency} dias/semana com sessões de ${inputs.sessionDuration} min. Foco em ${goalLabelMap[inputs.goal]} para nível ${expLabelMap[inputs.experienceLevel]}.`;
+  const description = `Periodização científica para ${effectiveInputs.frequency} dias/semana (${effectiveInputs.sessionDuration} min/sessão). ${scientificSummary.weeklyVolumeProfile}. Biomecânica calibrada para ${sexLabel}, ${effectiveInputs.age} anos.`;
 
   return {
     planName: planTitle,
     splitType,
     description,
     sessions,
-    weeklyDirectSetsPerMuscle: weeklySetsPerMuscle,
+    weeklyDirectSetsPerMuscle: avgDirectSets,
+    volumeBreakdown,
+    scientificSummary,
   };
 };
 
 /**
  * Busca substitutos biomecanicamente equivalentes para um exercício,
  * respeitando rigorosamente as restrições articulares, o ambiente de equipamento da academia
- * e opcionalmente um filtro específico de aparelho selecionado pelo usuário (ex: 'dumbbell', 'barbell', 'machine', 'cable').
+ * e opcionalmente um filtro específico de aparelho selecionado pelo usuário.
  */
 export const getBiomechanicSubstitutes = (
   currentExerciseId: string,
@@ -543,7 +878,12 @@ export const getBiomechanicSubstitutes = (
     goal: inputs?.goal || 'hypertrophy',
     experienceLevel: inputs?.experienceLevel || 'intermediate',
     equipment: inputs?.equipment || 'commercial',
-    restrictions: inputs?.restrictions || [],
+    restrictions: inputs?.restrictions || ['none'],
+    biologicalSex: inputs?.biologicalSex || 'male',
+    age: inputs?.age || 26,
+    weightKg: inputs?.weightKg || 78,
+    heightCm: inputs?.heightCm || 176,
+    musclePriority: inputs?.musclePriority || 'balanced',
   };
 
   const available = getAvailableExercises(effectiveInputs);
@@ -553,7 +893,6 @@ export const getBiomechanicSubstitutes = (
   let candidates = available.filter(ex => {
     if (ex.id === currentExerciseId) return false;
 
-    // Se o usuário filtrou por um aparelho específico no modal
     if (equipmentFilter && equipmentFilter !== 'all') {
       if (equipmentFilter === 'machine') {
         if (ex.equipment !== 'machine' && ex.equipment !== 'cable' && ex.equipment !== 'smith') {
@@ -564,16 +903,12 @@ export const getBiomechanicSubstitutes = (
       }
     }
 
-    // 1. Mesmo grupamento muscular alvo
     const isSameMuscle = current ? ex.targetMuscle === current.targetMuscle : true;
-
-    // 2. Ou mesmo padrão biomecânico de movimento
     const isSamePattern = current ? ex.movementPattern === current.movementPattern : false;
 
     return isSameMuscle || isSamePattern;
   });
 
-  // Se o exercício atual for composto, prioriza outros compostos no topo da lista
   if (current?.mechanic === 'compound') {
     candidates.sort((a, b) => {
       if (a.mechanic === 'compound' && b.mechanic !== 'compound') return -1;

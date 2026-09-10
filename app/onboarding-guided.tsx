@@ -1,10 +1,14 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
+  Activity,
   ArrowLeft,
   ArrowRight,
   Check,
-  RefreshCw
+  Layers,
+  RefreshCw,
+  Sparkles,
+  Zap,
 } from 'lucide-react-native';
 import { useState } from 'react';
 import {
@@ -13,6 +17,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -28,9 +33,9 @@ import {
   PrimaryGoal,
   SessionDuration,
   WeeklyFrequency,
-  generateGuidedRoutine
+  generateGuidedRoutine,
 } from '../src/services/recommendationEngine';
-import { useUserStore } from '../src/store/userStore';
+import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userStore';
 import Theme from '../src/theme/theme';
 import { Exercise } from '../src/types/workout';
 
@@ -38,10 +43,19 @@ export default function OnboardingGuidedScreen() {
   const router = useRouter();
   const { completeOnboarding } = useUserStore();
 
-  // Estado do wizard (Etapas B1 a B7)
+  // Wizard de 9 etapas científicas (Passos 1 a 9)
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Variáveis Coletadas (B1 a B6)
+  // Passo 1: Biometria & Fisiologia
+  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex>('male');
+  const [age, setAge] = useState<string>('26');
+  const [weight, setWeight] = useState<string>('78');
+  const [height, setHeight] = useState<string>('176');
+
+  // Passo 2: Foco Muscular Prioritário
+  const [musclePriority, setMusclePriority] = useState<MusclePriority>('balanced');
+
+  // Passos 3 a 8: Variáveis Operacionais de Treino
   const [frequency, setFrequency] = useState<WeeklyFrequency>(4);
   const [duration, setDuration] = useState<SessionDuration>('45-60');
   const [goal, setGoal] = useState<PrimaryGoal>('hypertrophy');
@@ -49,7 +63,7 @@ export default function OnboardingGuidedScreen() {
   const [equipment, setEquipment] = useState<EquipmentEnvironment>('commercial');
   const [restrictions, setRestrictions] = useState<PhysicalRestriction[]>(['none']);
 
-  // Plano Gerado (B7)
+  // Passo 9: Plano Fisiológico Gerado
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [activeSessionIndex, setActiveSessionIndex] = useState<number>(0);
 
@@ -63,9 +77,13 @@ export default function OnboardingGuidedScreen() {
 
   // Navegação entre passos
   const handleNextStep = () => {
-    Haptics.selectionAsync().catch(() => { });
-    if (currentStep === 6) {
-      // Ao sair do B6 para o B7, executa o motor algorítmico local
+    Haptics.selectionAsync().catch(() => {});
+    if (currentStep === 8) {
+      // Ao sair do Passo 8 para o 9, executa o motor fisiológico algorítmico
+      const parsedAge = parseInt(age, 10) || 26;
+      const parsedWeight = parseFloat(weight.replace(',', '.')) || 75;
+      const parsedHeight = parseFloat(height.replace(',', '.')) || 175;
+
       const inputs: GuidedInputs = {
         frequency,
         sessionDuration: duration,
@@ -73,18 +91,24 @@ export default function OnboardingGuidedScreen() {
         experienceLevel: experience,
         equipment,
         restrictions,
+        biologicalSex,
+        age: parsedAge,
+        weightKg: parsedWeight,
+        heightCm: parsedHeight,
+        musclePriority,
       };
+
       const plan = generateGuidedRoutine(inputs);
       setGeneratedPlan(plan);
       setActiveSessionIndex(0);
-      setCurrentStep(7);
+      setCurrentStep(9);
     } else {
       setCurrentStep(prev => prev + 1);
     }
   };
 
   const handlePrevStep = () => {
-    Haptics.selectionAsync().catch(() => { });
+    Haptics.selectionAsync().catch(() => {});
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
     } else {
@@ -94,7 +118,7 @@ export default function OnboardingGuidedScreen() {
 
   // Gerenciamento de restrições (multi-select inteligente)
   const toggleRestriction = (res: PhysicalRestriction) => {
-    Haptics.selectionAsync().catch(() => { });
+    Haptics.selectionAsync().catch(() => {});
     if (res === 'none') {
       setRestrictions(['none']);
       return;
@@ -112,7 +136,7 @@ export default function OnboardingGuidedScreen() {
 
   // Abertura do modal de troca de exercício
   const openSwapModal = (sessionIndex: number, exerciseIndex: number, exercise: PlannedExercise) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setExerciseToSwap({ sessionIndex, exerciseIndex, exercise });
     setSwapModalVisible(true);
   };
@@ -142,7 +166,7 @@ export default function OnboardingGuidedScreen() {
       sessions: updatedSessions,
     });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
   // Persistência no SQLite e conclusão do onboarding
@@ -150,6 +174,10 @@ export default function OnboardingGuidedScreen() {
     if (!generatedPlan) return;
 
     try {
+      const parsedAge = parseInt(age, 10) || 26;
+      const parsedWeight = parseFloat(weight.replace(',', '.')) || 75;
+      const parsedHeight = parseFloat(height.replace(',', '.')) || 175;
+
       // 1. Grava cada sessão como uma rotina no SQLite local
       generatedPlan.sessions.forEach((sess, sIdx) => {
         saveRoutine({
@@ -171,14 +199,27 @@ export default function OnboardingGuidedScreen() {
         });
       });
 
-      // 2. Atualiza a store global
+      // 2. Atualiza a store global com as métricas fisiológicas
+      const expMap: Record<ExperienceLevel, 'iniciante' | 'intermediario' | 'avancado'> = {
+        beginner: 'iniciante',
+        intermediate: 'intermediario',
+        advanced: 'avancado',
+        returning: 'iniciante',
+      };
+
       completeOnboarding({
         onboardingTrack: 'guided',
+        experienceLevel: expMap[experience],
+        biologicalSex,
+        age: parsedAge,
+        musclePriority,
+        heightCm: parsedHeight,
+        bodyWeightKg: parsedWeight,
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert(
-        'Plano Ativado!',
+        'Plano Fisiológico Ativado!',
         'Sua periodização personalizada foi calculada e gravada com sucesso no SQLite do heavy.io.',
         [{ text: 'Acessar Treino', onPress: () => router.replace('/(tabs)' as any) }]
       );
@@ -189,13 +230,15 @@ export default function OnboardingGuidedScreen() {
   };
 
   const stepLabels: Record<number, string> = {
-    1: 'Passo B1: Frequência Semanal',
-    2: 'Passo B2: Tempo por Sessão',
-    3: 'Passo B3: Objetivo Principal',
-    4: 'Passo B4: Nível de Experiência',
-    5: 'Passo B5: Local e Equipamento',
-    6: 'Passo B6: Restrições Articulares',
-    7: 'Passo B7: Plano Recomendado',
+    1: 'Passo 1: Biometria & Alavancas',
+    2: 'Passo 2: Foco Muscular Prioritário',
+    3: 'Passo 3: Frequência Semanal',
+    4: 'Passo 4: Tempo por Sessão',
+    5: 'Passo 5: Objetivo Fisiológico',
+    6: 'Passo 6: Nível de Treino & Histórico',
+    7: 'Passo 7: Local & Equipamento',
+    8: 'Passo 8: Restrições & Desconfortos',
+    9: 'Passo 9: Prescrição Científica do Treino',
   };
 
   return (
@@ -207,7 +250,7 @@ export default function OnboardingGuidedScreen() {
         </TouchableOpacity>
 
         <View style={styles.progressPills}>
-          {[1, 2, 3, 4, 5, 6, 7].map(step => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(step => (
             <View
               key={step}
               style={[
@@ -219,19 +262,183 @@ export default function OnboardingGuidedScreen() {
           ))}
         </View>
 
-        <Text style={styles.stepNumber}>{currentStep}/7</Text>
+        <Text style={styles.stepNumber}>{currentStep}/9</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.stepTitle}>{stepLabels[currentStep]}</Text>
 
         {/* ========================================================= */}
-        {/* PASSO B1: FREQUÊNCIA SEMANAL                              */}
+        {/* PASSO 1: BIOMETRIA & FISIOLOGIA                           */}
         {/* ========================================================= */}
         {currentStep === 1 && (
           <View>
             <Text style={styles.stepDescription}>
-              Quantos dias por semana você tem disponibilidade real para treinar?
+              Seus parâmetros antropométricos calibram alavancas de movimento, estresse axial na coluna e recuperação metabólica entre séries (Hunter, 2014).
+            </Text>
+
+            {/* Sexo Biológico */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>SEXO BIOLÓGICO</Text>
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    biologicalSex === 'male' && styles.toggleBtnActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setBiologicalSex('male');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.toggleBtnText,
+                      biologicalSex === 'male' && styles.toggleBtnTextActive,
+                    ]}
+                  >
+                    Masculino
+                  </Text>
+                  <Text style={styles.toggleSubText}>Mais descanso em compostos pesados</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    biologicalSex === 'female' && styles.toggleBtnActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setBiologicalSex('female');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.toggleBtnText,
+                      biologicalSex === 'female' && styles.toggleBtnTextActive,
+                    ]}
+                  >
+                    Feminino
+                  </Text>
+                  <Text style={styles.toggleSubText}>Menor fadiga metabólica e foco glúteo/quad</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Idade, Peso, Altura */}
+            <View style={styles.numericGrid}>
+              <View style={styles.numericCol}>
+                <Text style={styles.inputLabel}>IDADE</Text>
+                <View style={styles.numericInputBox}>
+                  <TextInput
+                    style={styles.numericTextInput}
+                    value={age}
+                    onChangeText={setAge}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                    placeholder="26"
+                    placeholderTextColor="#71717A"
+                  />
+                  <Text style={styles.inputUnit}>anos</Text>
+                </View>
+              </View>
+
+              <View style={styles.numericCol}>
+                <Text style={styles.inputLabel}>PESO</Text>
+                <View style={styles.numericInputBox}>
+                  <TextInput
+                    style={styles.numericTextInput}
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="numeric"
+                    maxLength={5}
+                    placeholder="78"
+                    placeholderTextColor="#71717A"
+                  />
+                  <Text style={styles.inputUnit}>kg</Text>
+                </View>
+              </View>
+
+              <View style={styles.numericCol}>
+                <Text style={styles.inputLabel}>ALTURA</Text>
+                <View style={styles.numericInputBox}>
+                  <TextInput
+                    style={styles.numericTextInput}
+                    value={height}
+                    onChangeText={setHeight}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                    placeholder="176"
+                    placeholderTextColor="#71717A"
+                  />
+                  <Text style={styles.inputUnit}>cm</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.scienceCallout}>
+              <Activity size={16} color="#A1A1AA" />
+              <Text style={styles.scienceCalloutText}>
+                Atletas mais altos (&gt;182 cm) recebem exercícios com menor cisalhamento espinhal. Atletas mais pesados (&gt;90 kg) recebem puxadas articuladas para preservar articulações.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* PASSO 2: FOCO MUSCULAR PRIORITÁRIO                        */}
+        {/* ========================================================= */}
+        {currentStep === 2 && (
+          <View>
+            <Text style={styles.stepDescription}>
+              Conforme Simão et al. (2012), os primeiros exercícios da sessão recebem o maior estímulo hipertrófico. Qual grupo muscular é sua prioridade máxima?
+            </Text>
+
+            <View style={styles.optionsList}>
+              {[
+                { id: 'balanced' as MusclePriority, title: 'Equilíbrio Fisiológico', sub: 'Distribuição uniforme sem viés. Ideal para base sólida e simetria muscular integral.', tag: 'PADRÃO HARMONIOSO' },
+                { id: 'chest' as MusclePriority, title: 'Prioridade Peitoral', sub: 'Ênfase em porção clavicular (superior) e esternal com maior volume semanal direto (MAV máximo).', tag: '+VOLUME PEITO' },
+                { id: 'back' as MusclePriority, title: 'Prioridade Costas & Dorsais', sub: 'Foco em largura de latíssimo e espessura de romboides com variações sob tensão prolongada.', tag: '+LARGURA & DENSIDADE' },
+                { id: 'legs_glutes' as MusclePriority, title: 'Prioridade Pernas & Glúteos', sub: 'Acento em agachamentos profundos, búlgaros e isoladores na posição de maior alongamento.', tag: '+HIPERTROFIA INFERIOR' },
+                { id: 'shoulders' as MusclePriority, title: 'Prioridade Ombros & Deltoides', sub: 'Foco em elevações laterais na polia e deltoide posterior para a silhueta estética em V.', tag: '+LARGURA CLAVICULAR' },
+                { id: 'arms' as MusclePriority, title: 'Prioridade Braços (Bíceps/Tríceps)', sub: 'Volume direto aumentado com ênfase na cabeça longa do tríceps e bíceps no plano escapular.', tag: '+HIPERTROFIA BRAQUIAL' },
+              ].map(opt => {
+                const isSelected = musclePriority === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.optionCard, isSelected && styles.optionCardActive]}
+                    onPress={() => setMusclePriority(opt.id)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.optionContent}>
+                      <View style={styles.tagRow}>
+                        <View style={styles.tagBadge}>
+                          <Text style={styles.tagBadgeText}>{opt.tag}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.optionTitle}>{opt.title}</Text>
+                      <Text style={styles.optionSub}>{opt.sub}</Text>
+                    </View>
+                    <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
+                      {isSelected && <View style={styles.radioInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* PASSO 3: FREQUÊNCIA SEMANAL                               */}
+        {/* ========================================================= */}
+        {currentStep === 3 && (
+          <View>
+            <Text style={styles.stepDescription}>
+              Quantos dias por semana você tem disponibilidade real para treinar com consistência?
             </Text>
 
             <View style={styles.optionsList}>
@@ -270,9 +477,9 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B2: TEMPO POR SESSÃO                                */}
+        {/* PASSO 4: TEMPO POR SESSÃO                                 */}
         {/* ========================================================= */}
-        {currentStep === 2 && (
+        {currentStep === 4 && (
           <View>
             <Text style={styles.stepDescription}>
               Quanto tempo você planeja dedicar a cada sessão de treino?
@@ -312,19 +519,19 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B3: OBJETIVO PRINCIPAL                             */}
+        {/* PASSO 5: OBJETIVO FISIOLÓGICO                             */}
         {/* ========================================================= */}
-        {currentStep === 3 && (
+        {currentStep === 5 && (
           <View>
             <Text style={styles.stepDescription}>
-              Qual o foco central que guiará a seleção de faixas de repetição e descanso?
+              Qual o foco central que guiará as faixas de repetição e o estresse mecânico ou metabólico?
             </Text>
 
             <View style={styles.optionsList}>
               {[
-                { id: 'hypertrophy' as PrimaryGoal, title: 'Hipertrofia Estética', sub: 'Ênfase em estresse metabólico, volume direto e faixas de 8-12 repetições.', tag: 'CRESCIMENTO' },
-                { id: 'strength' as PrimaryGoal, title: 'Ganho de Força Base', sub: 'Foco em progressão de carga mecânica em compostos pesados (5-8 reps, mais descanso).', tag: 'SOBRECARGA' },
-                { id: 'conditioning' as PrimaryGoal, title: 'Condicionamento Atlético', sub: 'Estímulo funcional e densidade muscular com menor tempo de repouso.', tag: 'PERFORMANCE' },
+                { id: 'hypertrophy' as PrimaryGoal, title: 'Hipertrofia Estética', sub: 'Tensão mecânica contínua, volume direto na faixa MAV e séries de 8-12 repetições com RIR 1-2.', tag: 'CRESCIMENTO MUSCULAR' },
+                { id: 'strength' as PrimaryGoal, title: 'Ganho de Força Base', sub: 'Progressão mecânica estrita nos grandes levantamentos (5-8 reps, mais repouso interséries).', tag: 'SOBRECARGA AXIAL' },
+                { id: 'conditioning' as PrimaryGoal, title: 'Condicionamento Atlético', sub: 'Estímulo funcional e densidade de trabalho com tempos controlados de repouso.', tag: 'PERFORMANCE' },
               ].map(opt => {
                 const isSelected = goal === opt.id;
                 return (
@@ -354,19 +561,19 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B4: NÍVEL DE EXPERIÊNCIA                            */}
+        {/* PASSO 6: NÍVEL DE TREINO & HISTÓRICO                      */}
         {/* ========================================================= */}
-        {currentStep === 4 && (
+        {currentStep === 6 && (
           <View>
             <Text style={styles.stepDescription}>
-              O algoritmo calibra o volume semanal de séries de acordo com seu histórico.
+              O algoritmo calibra o volume semanal de séries de acordo com seus marcos de volume (Israetel, RP).
             </Text>
 
             <View style={styles.optionsList}>
               {[
-                { id: 'beginner' as ExperienceLevel, title: 'Iniciante (< 6 meses)', sub: 'Volume de 10-12 séries semanais. Prioridade na aprendizagem de padrões motores.', tag: '10-12 SÉRIES/GRUPO' },
-                { id: 'intermediate' as ExperienceLevel, title: 'Intermediário (6m a 2 anos)', sub: 'Volume de 14-18 séries semanais. Maior variedade de estímulos pesados e acessórios.', tag: '14-18 SÉRIES/GRUPO' },
-                { id: 'returning' as ExperienceLevel, title: 'Retomando após pausa', sub: 'Rampa gradual de volume para evitar fadiga aguda precoce e dores tardias.', tag: 'REACLIMATAÇÃO' },
+                { id: 'beginner' as ExperienceLevel, title: 'Iniciante (< 6 meses)', sub: 'Volume conservador (MEV). Prioridade na aprendizagem motora e adaptações neurais sem fadiga sistêmica.', tag: '10-12 SÉRIES/GRUPO' },
+                { id: 'intermediate' as ExperienceLevel, title: 'Intermediário (6m a 2 anos)', sub: 'Volume ótimo adaptativo (MAV). Maior variedade de estímulos pesados e posições de alongamento.', tag: '14-18 SÉRIES/GRUPO' },
+                { id: 'returning' as ExperienceLevel, title: 'Retomando após pausa', sub: 'Rampa gradual de volume para proteger tecidos conjuntivos e evitar dor tardia excessiva.', tag: 'REACLIMATAÇÃO' },
               ].map(opt => {
                 const isSelected = experience === opt.id;
                 return (
@@ -396,19 +603,19 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B5: LOCAL / EQUIPAMENTO                             */}
+        {/* PASSO 7: LOCAL & EQUIPAMENTO                              */}
         {/* ========================================================= */}
-        {currentStep === 5 && (
+        {currentStep === 7 && (
           <View>
             <Text style={styles.stepDescription}>
-              Quais equipamentos estarão realmente disponíveis para os seus treinos?
+              Quais equipamentos estarão realmente disponíveis para as sessões de treino?
             </Text>
 
             <View style={styles.optionsList}>
               {[
-                { id: 'commercial' as EquipmentEnvironment, title: 'Academia Comercial Completa', sub: 'Acesso pleno a barras olímpicas, máquinas articuladas, cabos e racks de halteres.', tag: 'ACERVO TOTAL' },
+                { id: 'commercial' as EquipmentEnvironment, title: 'Academia Comercial Completa', sub: 'Acesso total a barras olímpicas, máquinas articuladas, cabos e racks de agachamento.', tag: 'ACERVO COMPLETO' },
                 { id: 'condo' as EquipmentEnvironment, title: 'Academia de Condomínio / Básica', sub: 'Halteres, banco ajustável, polia funcional e barra. Sem máquinas de alavanca complexas.', tag: 'ESSENCIAIS' },
-                { id: 'home_dumbbells' as EquipmentEnvironment, title: 'Halteres + Peso do Corpo', sub: 'Treino exclusivo com pesos livres manuais e calistenia de sobrecarga.', tag: 'MINIMALISTA' },
+                { id: 'home_dumbbells' as EquipmentEnvironment, title: 'Halteres + Peso do Corpo', sub: 'Treino exclusivo com pesos livres manuais e calistenia com sobrecarga.', tag: 'MINIMALISTA' },
               ].map(opt => {
                 const isSelected = equipment === opt.id;
                 return (
@@ -438,12 +645,12 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B6: RESTRIÇÕES / DESCONFORTOS                       */}
+        {/* PASSO 8: RESTRIÇÕES & DESCONFORTOS                        */}
         {/* ========================================================= */}
-        {currentStep === 6 && (
+        {currentStep === 8 && (
           <View>
             <Text style={styles.stepDescription}>
-              Selecione se possui desconfortos articulares. O algoritmo substituirá automaticamente exercícios lesivos por alternativas seguras.
+              Selecione desconfortos articulares prévios. O algoritmo substituirá automaticamente exercícios axiais ou de alto risco por opções biomecanicamente favoráveis.
             </Text>
 
             <View style={styles.optionsList}>
@@ -481,9 +688,9 @@ export default function OnboardingGuidedScreen() {
         )}
 
         {/* ========================================================= */}
-        {/* PASSO B7: APRESENTAÇÃO E APROVAÇÃO DO PLANO               */}
+        {/* PASSO 9: PRESCRIÇÃO CIENTÍFICA DO TREINO                  */}
         {/* ========================================================= */}
-        {currentStep === 7 && generatedPlan && (
+        {currentStep === 9 && generatedPlan && (
           <View>
             {/* Header do Plano Gerado */}
             <View style={styles.planHeaderCard}>
@@ -497,7 +704,59 @@ export default function OnboardingGuidedScreen() {
               </View>
               <Text style={styles.planTitle}>{generatedPlan.planName}</Text>
               <Text style={styles.planDesc}>{generatedPlan.description}</Text>
+
+              {/* Framework Científico Integrado */}
+              {generatedPlan.scientificSummary && (
+                <View style={styles.scienceFrameworkBox}>
+                  <View style={styles.scienceBadgeRow}>
+                    <Sparkles size={13} color="#FFFFFF" />
+                    <Text style={styles.scienceFrameworkBadge}>
+                      {generatedPlan.scientificSummary.primaryStimulus}
+                    </Text>
+                  </View>
+                  <Text style={styles.scienceFrameworkText}>
+                    {generatedPlan.scientificSummary.weeklyVolumeProfile}
+                  </Text>
+                  <Text style={styles.scienceFrameworkAdaptation}>
+                    {generatedPlan.scientificSummary.anthropometricAdaptation}
+                  </Text>
+                  <Text style={styles.scienceFrameworkSfr}>
+                    {generatedPlan.scientificSummary.recoveryRecommendation}
+                  </Text>
+                </View>
+              )}
             </View>
+
+            {/* Volume Landmarks Fisiológicos */}
+            {generatedPlan.volumeBreakdown && generatedPlan.volumeBreakdown.length > 0 && (
+              <View style={styles.volumeLandmarksCard}>
+                <View style={styles.landmarksHeader}>
+                  <Layers size={14} color="#A1A1AA" />
+                  <Text style={styles.landmarksTitle}>DISTRIBUIÇÃO DE VOLUME SEMANAL (MEV / MAV)</Text>
+                </View>
+                <View style={styles.landmarksGrid}>
+                  {generatedPlan.volumeBreakdown.slice(0, 6).map((vb, vbIdx) => (
+                    <View key={`${vb.muscle}_${vbIdx}`} style={styles.landmarkItem}>
+                      <View style={styles.landmarkLabelRow}>
+                        <Text style={styles.landmarkMuscleName}>{vb.muscleLabel}</Text>
+                        {vb.landmark === 'PRIORITÁRIO' ? (
+                          <View style={styles.priorityMiniBadge}>
+                            <Text style={styles.priorityMiniBadgeText}>PRIORITÁRIO</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.mevMavBadge}>
+                            <Text style={styles.mevMavBadgeText}>{vb.landmark}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.landmarkSets}>
+                        {vb.weeklySets} <Text style={styles.landmarkSetsUnit}>séries/sem</Text>
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Abas das Sessões */}
             <Text style={styles.sessionsHeading}>Sessões da Periodização:</Text>
@@ -509,7 +768,7 @@ export default function OnboardingGuidedScreen() {
                     key={sess.id}
                     style={[styles.sessionTabPill, isActive && styles.sessionTabPillActive]}
                     onPress={() => {
-                      Haptics.selectionAsync().catch(() => { });
+                      Haptics.selectionAsync().catch(() => {});
                       setActiveSessionIndex(idx);
                     }}
                     activeOpacity={0.8}
@@ -538,25 +797,18 @@ export default function OnboardingGuidedScreen() {
                 {/* Lista de Exercícios da Sessão */}
                 <View style={styles.exerciseList}>
                   {generatedPlan.sessions[activeSessionIndex].exercises.map((ex, exIdx) => {
-                    const tierLabelMap: Record<string, { label: string; color: string }> = {
-                      primary_compound: { label: 'COMPOSTO PRINCIPAL', color: Theme.colors.primary },
-                      secondary_compound: { label: 'COMPOSTO ACESSÓRIO', color: Theme.colors.textSecondary },
-                      isolation: { label: 'ISOLADOR', color: '#A1A1AA' },
-                      core: { label: 'CORE / ESTABILIDADE', color: Theme.colors.accentTitanium },
-                    };
-                    const tierInfo = tierLabelMap[ex.tier] || { label: 'EXERCÍCIO', color: Theme.colors.textSecondary };
-
                     return (
                       <View key={`${ex.exerciseId}_${exIdx}`} style={styles.exerciseRowCard}>
                         <View style={styles.exLeft}>
-                          <View style={styles.exTierBadge}>
-                            <Text style={[styles.exTierText, { color: tierInfo.color }]}>
-                              {tierInfo.label}
-                            </Text>
+                          {/* Papel Fisiológico */}
+                          <View style={styles.exRoleBadge}>
+                            <Zap size={10} color="#FFFFFF" />
+                            <Text style={styles.exRoleText}>{ex.physiologicalRole}</Text>
                           </View>
+
                           <Text style={styles.exName}>{ex.exerciseName}</Text>
                           <Text style={styles.exParams}>
-                            {ex.targetSets} séries × {ex.targetRepsMin}-{ex.targetRepsMax} reps • {ex.restSeconds}s descanso
+                            {ex.targetSets} séries × {ex.targetRepsMin}-{ex.targetRepsMax} reps • {ex.restSeconds}s repouso • RIR {ex.targetRir}
                           </Text>
                         </View>
 
@@ -582,21 +834,21 @@ export default function OnboardingGuidedScreen() {
               onPress={handleConfirmPlan}
               activeOpacity={0.85}
             >
-              <Text style={styles.finishPlanBtnText}>Começar com esta rotina</Text>
+              <Text style={styles.finishPlanBtnText}>Ativar Periodização no App</Text>
               <ArrowRight size={18} color={Theme.colors.textInverse} />
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Botão de Avanço nos Passos 1 a 6 */}
-        {currentStep < 7 && (
+        {/* Botão de Avanço nos Passos 1 a 8 */}
+        {currentStep < 9 && (
           <TouchableOpacity
             style={styles.nextButton}
             onPress={handleNextStep}
             activeOpacity={0.85}
           >
             <Text style={styles.nextButtonText}>
-              {currentStep === 6 ? 'Gerar Periodização' : 'Próximo Passo'}
+              {currentStep === 8 ? 'Calcular Periodização Fisiológica' : 'Próximo Passo'}
             </Text>
             <ArrowRight size={18} color={Theme.colors.textInverse} />
           </TouchableOpacity>
@@ -615,6 +867,11 @@ export default function OnboardingGuidedScreen() {
           experienceLevel: experience,
           equipment,
           restrictions,
+          biologicalSex,
+          age: parseInt(age, 10) || 26,
+          weightKg: parseFloat(weight.replace(',', '.')) || 75,
+          heightCm: parseFloat(height.replace(',', '.')) || 175,
+          musclePriority,
         }}
         onSelectSubstitute={handleApplySwap}
       />
@@ -635,36 +892,36 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Theme.colors.border,
+    borderBottomColor: '#27272A',
   },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   progressPills: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     alignItems: 'center',
   },
   pill: {
-    width: 20,
+    width: 14,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
   },
   pillActive: {
-    backgroundColor: Theme.colors.borderLight,
+    backgroundColor: '#3F3F46',
   },
   pillCurrent: {
-    backgroundColor: Theme.colors.primary,
-    width: 28,
+    backgroundColor: '#FFFFFF',
+    width: 22,
   },
   stepNumber: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -674,37 +931,108 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 60,
   },
-  badgeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Theme.colors.surfaceElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: Theme.colors.borderLight,
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
-  badgeHeaderText: {
-    color: Theme.colors.primary,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
   stepTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Theme.colors.text,
+    color: '#FFFFFF',
     letterSpacing: -0.4,
     marginBottom: 6,
   },
   stepDescription: {
     fontSize: 13,
-    color: Theme.colors.textMuted,
+    color: '#A1A1AA',
     lineHeight: 19,
     marginBottom: 22,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#71717A',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  toggleBtn: {
+    flex: 1,
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 10,
+    padding: 14,
+  },
+  toggleBtnActive: {
+    backgroundColor: '#18181B',
+    borderColor: '#FFFFFF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFFFFF',
+  },
+  toggleBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#A1A1AA',
+    marginBottom: 4,
+  },
+  toggleBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  toggleSubText: {
+    fontSize: 11,
+    color: '#71717A',
+    lineHeight: 15,
+  },
+  numericGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  numericCol: {
+    flex: 1,
+  },
+  numericInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  numericTextInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  inputUnit: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#71717A',
+  },
+  scienceCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 28,
+  },
+  scienceCalloutText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#A1A1AA',
+    lineHeight: 18,
   },
   optionsList: {
     gap: 12,
@@ -712,19 +1040,19 @@ const styles = StyleSheet.create({
   },
   optionCard: {
     backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.md,
+    borderRadius: 10,
     padding: 16,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderColor: '#27272A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   optionCardActive: {
     backgroundColor: '#18181B',
-    borderColor: Theme.colors.primary,
+    borderColor: '#FFFFFF',
     borderLeftWidth: 4,
-    borderLeftColor: Theme.colors.primary,
+    borderLeftColor: '#FFFFFF',
   },
   optionContent: {
     flex: 1,
@@ -735,13 +1063,13 @@ const styles = StyleSheet.create({
   },
   tagBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#18181B',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
   },
   tagBadgeText: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -749,12 +1077,12 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: Theme.colors.text,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   optionSub: {
     fontSize: 12,
-    color: Theme.colors.textMuted,
+    color: '#A1A1AA',
     lineHeight: 16,
   },
   radioCircle: {
@@ -762,59 +1090,55 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: Theme.colors.borderLight,
+    borderColor: '#3F3F46',
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioCircleActive: {
-    borderColor: Theme.colors.primary,
+    borderColor: '#FFFFFF',
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
   },
   checkSquare: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Theme.colors.borderLight,
+    borderColor: '#3F3F46',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#121215',
   },
   checkSquareActive: {
-    backgroundColor: Theme.colors.primary,
-    borderColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
   nextButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
     height: 50,
-    borderRadius: Theme.borderRadius.md,
+    borderRadius: 10,
     gap: 8,
   },
   nextButtonText: {
-    color: Theme.colors.textInverse,
+    color: '#09090B',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
     letterSpacing: 0.3,
   },
-
-  // =========================================================
-  // ESTILOS DO PASSO B7 (PLANO RECOMENDADO)
-  // =========================================================
   planHeaderCard: {
     backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.lg,
+    borderRadius: 12,
     padding: 18,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
-    marginBottom: 20,
+    borderColor: '#27272A',
+    marginBottom: 16,
   },
   planHeaderTop: {
     flexDirection: 'row',
@@ -823,37 +1147,151 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   splitBadge: {
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
   splitBadgeText: {
-    color: Theme.colors.textInverse,
+    color: '#09090B',
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   volumeText: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 11,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   planTitle: {
-    color: Theme.colors.text,
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: -0.3,
     marginBottom: 6,
   },
   planDesc: {
-    color: Theme.colors.textMuted,
+    color: '#A1A1AA',
     fontSize: 12,
     lineHeight: 18,
   },
+  scienceFrameworkBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#27272A',
+  },
+  scienceBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  scienceFrameworkBadge: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  scienceFrameworkText: {
+    color: '#D4D4D8',
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 4,
+  },
+  scienceFrameworkAdaptation: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  scienceFrameworkSfr: {
+    color: '#71717A',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  volumeLandmarksCard: {
+    backgroundColor: '#121215',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    marginBottom: 20,
+  },
+  landmarksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  landmarksTitle: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  landmarksGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  landmarkItem: {
+    backgroundColor: '#18181B',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: '48%',
+  },
+  landmarkLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  landmarkMuscleName: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  priorityMiniBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  priorityMiniBadgeText: {
+    color: '#09090B',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  mevMavBadge: {
+    backgroundColor: '#27272A',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  mevMavBadgeText: {
+    color: '#A1A1AA',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+  landmarkSets: {
+    color: '#D4D4D8',
+    fontSize: 13,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  landmarkSetsUnit: {
+    color: '#71717A',
+    fontSize: 10,
+    fontWeight: '500',
+  },
   sessionsHeading: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -868,51 +1306,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#121215',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: Theme.borderRadius.md,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderColor: '#27272A',
     marginRight: 8,
     alignItems: 'center',
   },
   sessionTabPillActive: {
     backgroundColor: '#18181B',
-    borderColor: Theme.colors.primary,
+    borderColor: '#FFFFFF',
   },
   sessionTabPillText: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 13,
     fontWeight: '800',
   },
   sessionTabPillTextActive: {
-    color: Theme.colors.text,
+    color: '#FFFFFF',
   },
   sessionTabPillSub: {
-    color: Theme.colors.textMuted,
+    color: '#71717A',
     fontSize: 10,
     fontWeight: '600',
     marginTop: 2,
   },
   activeSessionContainer: {
     backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.lg,
+    borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderColor: '#27272A',
     marginBottom: 24,
   },
   sessionMetaHeader: {
     marginBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: '#27272A',
     paddingBottom: 10,
   },
   sessionMetaName: {
-    color: Theme.colors.text,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
   sessionMetaFocus: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
     marginTop: 2,
   },
@@ -921,10 +1359,10 @@ const styles = StyleSheet.create({
   },
   exerciseRowCard: {
     backgroundColor: '#18181B',
-    borderRadius: Theme.borderRadius.sm,
+    borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderColor: '#27272A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -933,21 +1371,25 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 8,
   },
-  exTierBadge: {
+  exRoleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 4,
   },
-  exTierText: {
+  exRoleText: {
     fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    color: '#D4D4D8',
+    letterSpacing: 0.6,
   },
   exName: {
-    color: Theme.colors.text,
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },
   exParams: {
-    color: Theme.colors.textMuted,
+    color: '#A1A1AA',
     fontSize: 11,
     marginTop: 3,
     fontVariant: ['tabular-nums'],
@@ -956,15 +1398,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Theme.colors.surfaceElevated,
+    backgroundColor: '#121215',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Theme.borderRadius.sm,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: Theme.colors.borderLight,
+    borderColor: '#27272A',
   },
   swapBtnText: {
-    color: Theme.colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -972,13 +1414,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: '#FFFFFF',
     height: 52,
-    borderRadius: Theme.borderRadius.md,
+    borderRadius: 10,
     gap: 8,
   },
   finishPlanBtnText: {
-    color: Theme.colors.textInverse,
+    color: '#09090B',
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: 0.3,

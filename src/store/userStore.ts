@@ -11,11 +11,17 @@ export interface UserPreferences {
   vibrationEnabled: boolean;
 }
 
+export type BiologicalSex = 'male' | 'female';
+export type MusclePriority = 'balanced' | 'chest' | 'back' | 'legs_glutes' | 'shoulders' | 'arms';
+
 export interface UserProfile {
   id?: string;
   email?: string;
   name?: string;
   onboardingTrack?: OnboardingTrack;
+  biologicalSex?: BiologicalSex;
+  age?: number;
+  musclePriority?: MusclePriority;
   experienceLevel?: 'iniciante' | 'intermediario' | 'avancado';
   primaryGoal?: 'forca_pura' | 'hipertrofia' | 'recomposicao';
   preferredDaysPerWeek?: number;
