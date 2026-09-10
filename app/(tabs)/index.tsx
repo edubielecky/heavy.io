@@ -1,54 +1,50 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Alert 
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useFocusEffect } from 'expo-router';
+import {
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Flame,
+  Layers,
+  Play,
+  Plus,
+  RotateCcw,
+  X
+} from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
-import { 
-  Play, 
-  Plus, 
-  Flame, 
-  Trophy, 
-  CheckCircle2, 
-  X, 
-  Clock, 
-  Sparkles, 
-  Dumbbell,
-  Calendar,
-  Layers,
-  ChevronRight,
-  RotateCcw
-} from 'lucide-react-native';
-import { useWorkoutStore } from '../../src/store/workoutStore';
-import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
 import { AddExerciseModal } from '../../src/components/AddExerciseModal';
 import { RestTimerBar } from '../../src/components/RestTimerBar';
-import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
 import { RoutineManagementModal } from '../../src/components/RoutineManagementModal';
-import { getExerciseById, getRoutines, getActiveProgram, getSessionPRs } from '../../src/database/database';
-import { Routine, WorkoutSession, PersonalRecord, WorkoutProgram } from '../../src/types/workout';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
+import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
+import { getActiveProgram, getRoutines, getSessionPRs } from '../../src/database/database';
+import { useWorkoutStore } from '../../src/store/workoutStore';
 import Theme from '../../src/theme/theme';
+import { PersonalRecord, Routine, WorkoutProgram, WorkoutSession } from '../../src/types/workout';
 
 export default function WorkoutScreen() {
-  const { 
-    currentWorkout, 
+  const {
+    currentWorkout,
     isSessionActiveInForeground,
-    startWorkout, 
+    startWorkout,
     startWorkoutFromRoutine,
     resumeActiveSession,
     discardActiveSession,
-    cancelWorkout, 
-    finishWorkout, 
+    cancelWorkout,
+    finishWorkout,
     addExerciseToCurrentWorkout,
     workoutHistory,
     personalRecords,
-    loadFromDatabase 
+    loadFromDatabase
   } = useWorkoutStore();
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -86,7 +82,7 @@ export default function WorkoutScreen() {
     let timer: ReturnType<typeof setInterval> | null = null;
     if (currentWorkout) {
       // Impede que a tela apague durante as séries e descansos
-      activateKeepAwakeAsync().catch(() => {});
+      activateKeepAwakeAsync().catch(() => { });
 
       const startMs = new Date(currentWorkout.startTime).getTime();
       const updateElapsed = () => {
@@ -96,12 +92,12 @@ export default function WorkoutScreen() {
       updateElapsed();
       timer = setInterval(updateElapsed, 1000);
     } else {
-      deactivateKeepAwake().catch(() => {});
+      deactivateKeepAwake().catch(() => { });
       setElapsedSeconds(0);
     }
     return () => {
       if (timer) clearInterval(timer);
-      deactivateKeepAwake().catch(() => {});
+      deactivateKeepAwake().catch(() => { });
     };
   }, [currentWorkout]);
 
@@ -197,7 +193,7 @@ export default function WorkoutScreen() {
     if (!routineOfTheDay || routines.length <= 1) return [];
     const currentIndex = routines.findIndex(r => r.id === routineOfTheDay.id);
     if (currentIndex === -1) return routines.filter(r => r.id !== routineOfTheDay.id);
-    
+
     const ordered: Routine[] = [];
     for (let i = 1; i < routines.length; i++) {
       const nextIdx = (currentIndex + i) % routines.length;
@@ -247,8 +243,8 @@ export default function WorkoutScreen() {
               </Text>
 
               <View style={styles.recoveryActions}>
-                <TouchableOpacity 
-                  style={styles.recoveryResumeBtn} 
+                <TouchableOpacity
+                  style={styles.recoveryResumeBtn}
                   onPress={resumeActiveSession}
                   activeOpacity={0.8}
                 >
@@ -256,8 +252,8 @@ export default function WorkoutScreen() {
                   <Text style={styles.recoveryResumeText}>Continuar Treino</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={styles.recoveryDiscardBtn} 
+                <TouchableOpacity
+                  style={styles.recoveryDiscardBtn}
                   onPress={handleDiscardRecoveryWorkout}
                   activeOpacity={0.8}
                 >
@@ -293,10 +289,6 @@ export default function WorkoutScreen() {
             <View style={styles.heroCard}>
               <View style={styles.heroHeader}>
                 <View style={styles.heroBadgeRow}>
-                  <View style={styles.heroBadgeActive}>
-                    <Calendar size={11} color={Theme.colors.textInverse} />
-                    <Text style={styles.heroBadgeActiveText}>TREINO PROGRAMADO</Text>
-                  </View>
 
                   <TouchableOpacity
                     style={styles.programChipBtn}
@@ -411,8 +403,8 @@ export default function WorkoutScreen() {
           )}
 
           {/* Iniciar Treino Vazio / Avulso */}
-          <TouchableOpacity 
-            style={styles.blankStartBtn} 
+          <TouchableOpacity
+            style={styles.blankStartBtn}
             onPress={() => startWorkout('Treino Livre de Força')}
             activeOpacity={0.8}
           >
@@ -481,16 +473,16 @@ export default function WorkoutScreen() {
           </View>
 
           <View style={styles.activeHeaderActions}>
-            <TouchableOpacity 
-              style={styles.cancelBtn} 
+            <TouchableOpacity
+              style={styles.cancelBtn}
               onPress={handleCancelWorkout}
               activeOpacity={0.7}
             >
               <X size={18} color={Theme.colors.textMuted} />
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.finishBtn} 
+            <TouchableOpacity
+              style={styles.finishBtn}
               onPress={handleFinishWorkout}
               activeOpacity={0.8}
             >
@@ -501,20 +493,20 @@ export default function WorkoutScreen() {
         </View>
 
         {/* Workout Exercises Scroll */}
-        <ScrollView 
-          style={styles.exercisesScroll} 
+        <ScrollView
+          style={styles.exercisesScroll}
           contentContainerStyle={styles.exercisesScrollContent}
           showsVerticalScrollIndicator={false}
         >
           {currentWorkout.exercises.map((workoutExercise) => (
-            <WorkoutExerciseCard 
-              key={workoutExercise.id} 
-              workoutExercise={workoutExercise} 
+            <WorkoutExerciseCard
+              key={workoutExercise.id}
+              workoutExercise={workoutExercise}
             />
           ))}
 
           {/* Adicionar Exercício Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.addExerciseBtn}
             onPress={() => setModalVisible(true)}
             activeOpacity={0.8}
