@@ -48,8 +48,10 @@ import {
   saveRoutine,
   getExerciseById,
 } from '../database/database';
+import { useRouter } from 'expo-router';
 import { SEED_EXERCISES } from '../database/seedData';
 import { AddExerciseModal } from './AddExerciseModal';
+import { BatchExerciseModal } from './BatchExerciseModal';
 import { WorkoutAuditModal } from './WorkoutAuditModal';
 import { AuditAction } from '../services/aiWorkoutService';
 
@@ -64,6 +66,8 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
   onClose,
   onProgramsUpdated,
 }) => {
+  const router = useRouter();
+
   // Estado das fichas carregadas
   const [programs, setPrograms] = useState<WorkoutProgram[]>([]);
   // Ficha selecionada para edição detalhada de dias/exercícios (null = tela inicial de listagem)
@@ -84,10 +88,37 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
 
   // Modal para adicionar exercício ao dia selecionado
   const [isAddExerciseModalOpen, setIsAddExerciseModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
   // Submodal de Diagnóstico Biomecânico (IA)
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditTargetProgram, setAuditTargetProgram] = useState<WorkoutProgram | null>(null);
+
+  // Adicionar exercícios em lote ao dia atual
+  const handleConfirmBatchExercises = (exercises: Exercise[]) => {
+    if (!currentSelectedRoutine) return;
+    setIsBatchModalOpen(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+    const currentOrder = currentSelectedRoutine.exercises.length;
+    const newItems: RoutineExerciseItem[] = exercises.map((ex, idx) => ({
+      id: `re_${currentSelectedRoutine.id}_${currentOrder + idx}_${Date.now()}`,
+      exerciseId: ex.id,
+      exerciseName: ex.name,
+      targetMuscle: ex.targetMuscle,
+      orderIndex: currentOrder + idx,
+      targetSets: 3,
+      targetRepsMin: 8,
+      targetRepsMax: 12,
+      restSeconds: ex.defaultRestSeconds || 90,
+    }));
+
+    saveRoutine({
+      ...currentSelectedRoutine,
+      exercises: [...currentSelectedRoutine.exercises, ...newItems],
+    });
+    reloadPrograms();
+  };
 
   const handleApplyAuditAction = (action: AuditAction) => {
     if (!auditTargetProgram) return;
@@ -459,15 +490,55 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
               </Text>
             </View>
 
-            {/* Botão para criar nova ficha */}
-            <TouchableOpacity
-              style={styles.createProgramBtn}
-              onPress={() => setIsNewProgramModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Plus size={16} color={Theme.colors.textInverse} />
-              <Text style={styles.createProgramBtnText}>Criar Nova Ficha</Text>
-            </TouchableOpacity>
+            {/* HUB DE CRIAÇÃO: PRESCRIÇÃO IA OU MONTAGEM MANUAL */}
+            <View style={styles.creationHub}>
+              {/* Opção 1: IA Científica */}
+              <TouchableOpacity
+                style={styles.createAiCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  onClose();
+                  router.push('/onboarding-guided' as any);
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.createAiCardTop}>
+                  <View style={styles.createAiIconContainer}>
+                    <Sparkles size={16} color={Theme.colors.textInverse} />
+                  </View>
+                  <View style={styles.aiBadgeTag}>
+                    <Text style={styles.aiBadgeTagText}>PRESCRIÇÃO IA</Text>
+                  </View>
+                </View>
+                <Text style={styles.createAiTitle}>Gerar Ficha com IA</Text>
+                <Text style={styles.createAiDesc}>
+                  O algoritmo prescreve frequência, divisões, sobrecarga mecânica e seleção biomecânica para sua rotina.
+                </Text>
+              </TouchableOpacity>
+
+              {/* Opção 2: Montagem Manual */}
+              <TouchableOpacity
+                style={styles.createManualCard}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setIsNewProgramModalOpen(true);
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.createManualCardTop}>
+                  <View style={styles.createManualIconContainer}>
+                    <Plus size={16} color={Theme.colors.text} />
+                  </View>
+                  <View style={styles.manualBadgeTag}>
+                    <Text style={styles.manualBadgeTagText}>AUTONOMIA</Text>
+                  </View>
+                </View>
+                <Text style={styles.createManualTitle}>Montar Manualmente</Text>
+                <Text style={styles.createManualDesc}>
+                  Defina a divisão (PPL, Upper/Lower, Full Body) e selecione os exercícios do catálogo.
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Listagem das Fichas */}
             <View style={styles.programsList}>
@@ -713,21 +784,32 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
 
                     {/* Cabeçalho da Lista de Exercícios */}
                     <View style={styles.exerciseSectionHeader}>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={styles.exerciseSectionTitle}>Exercícios Escalados</Text>
                         <Text style={styles.exerciseSectionSub}>
                           {currentSelectedRoutine.exercises.length} movimentos programados para este dia
                         </Text>
                       </View>
 
-                      <TouchableOpacity
-                        style={styles.addExerciseBtn}
-                        onPress={() => setIsAddExerciseModalOpen(true)}
-                        activeOpacity={0.85}
-                      >
-                        <Plus size={14} color={Theme.colors.textInverse} />
-                        <Text style={styles.addExerciseBtnText}>Adicionar</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.addBatchBtn}
+                          onPress={() => setIsBatchModalOpen(true)}
+                          activeOpacity={0.85}
+                        >
+                          <Layers size={13} color={Theme.colors.text} />
+                          <Text style={styles.addBatchBtnText}>Em Lote</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.addExerciseBtn}
+                          onPress={() => setIsAddExerciseModalOpen(true)}
+                          activeOpacity={0.85}
+                        >
+                          <Plus size={14} color={Theme.colors.textInverse} />
+                          <Text style={styles.addExerciseBtnText}>Adicionar</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     {/* Lista de Exercícios com Reordenação e Edição */}
@@ -858,8 +940,26 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
                         <Dumbbell size={28} color={Theme.colors.textMuted} />
                         <Text style={styles.emptyExercisesTitle}>Nenhum exercício neste dia</Text>
                         <Text style={styles.emptyExercisesDesc}>
-                          Toque em "+ Adicionar" acima para escalar exercícios do catálogo para este dia.
+                          Adicione exercícios individualmente ou selecione vários em lote para montar seu dia rapidamente.
                         </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                          <TouchableOpacity
+                            style={styles.emptyBatchBtn}
+                            onPress={() => setIsBatchModalOpen(true)}
+                            activeOpacity={0.85}
+                          >
+                            <Layers size={13} color={Theme.colors.text} />
+                            <Text style={styles.emptyBatchBtnText}>Selecionar em Lote</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.emptyAddBtn}
+                            onPress={() => setIsAddExerciseModalOpen(true)}
+                            activeOpacity={0.85}
+                          >
+                            <Plus size={14} color={Theme.colors.textInverse} />
+                            <Text style={styles.emptyAddBtnText}>Adicionar Exercício</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     )}
                   </ScrollView>
@@ -1032,6 +1132,16 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
           program={auditTargetProgram}
           onApplyAction={handleApplyAuditAction}
         />
+
+        {/* ======================================================== */}
+        {/* MODAL DE SELEÇÃO EM LOTE DE EXERCÍCIOS                   */}
+        {/* ======================================================== */}
+        <BatchExerciseModal
+          visible={isBatchModalOpen}
+          onClose={() => setIsBatchModalOpen(false)}
+          onConfirmBatch={handleConfirmBatchExercises}
+          alreadySelectedIds={currentSelectedRoutine?.exercises.map((e) => e.exerciseId) || []}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -1095,18 +1205,145 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     lineHeight: 18,
   },
-  createProgramBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Theme.colors.primary,
-    paddingVertical: 12,
-    borderRadius: Theme.borderRadius.md,
+  creationHub: {
+    gap: 10,
     marginBottom: 20,
   },
-  createProgramBtnText: {
+  createAiCard: {
+    backgroundColor: Theme.colors.surfaceCard,
+    borderRadius: Theme.borderRadius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+    gap: 6,
+  },
+  createAiCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  createAiIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiBadgeTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  aiBadgeTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Theme.colors.text,
+    letterSpacing: 0.5,
+  },
+  createAiTitle: {
     fontSize: 14,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  createAiDesc: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    lineHeight: 16,
+  },
+  createManualCard: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.borderRadius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    gap: 6,
+  },
+  createManualCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  createManualIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: Theme.colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  manualBadgeTag: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  manualBadgeTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Theme.colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  createManualTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  createManualDesc: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    lineHeight: 16,
+  },
+  addBatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  addBatchBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
+  emptyBatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  emptyBatchBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
+  emptyAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  emptyAddBtnText: {
+    fontSize: 12,
     fontWeight: '800',
     color: Theme.colors.textInverse,
   },

@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { SwapExerciseModal } from '../src/components/SwapExerciseModal';
 import { WorkoutAuditModal } from '../src/components/WorkoutAuditModal';
-import { saveRoutine } from '../src/database/database';
+import { saveRoutine, createProgram, setActiveProgram } from '../src/database/database';
 import {
   EquipmentEnvironment,
   ExperienceLevel,
@@ -204,7 +204,7 @@ export default function OnboardingGuidedScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
-  // Persistência no SQLite e conclusão do onboarding
+  // Persistência no SQLite e conclusão/ativação da ficha
   const handleConfirmPlan = () => {
     if (!generatedPlan) return;
 
@@ -213,26 +213,23 @@ export default function OnboardingGuidedScreen() {
       const parsedWeight = parseFloat(weight.replace(',', '.')) || 75;
       const parsedHeight = parseFloat(height.replace(',', '.')) || 175;
 
-      // 1. Grava cada sessão como uma rotina no SQLite local
-      generatedPlan.sessions.forEach((sess, sIdx) => {
-        saveRoutine({
-          id: `guided_routine_${Date.now()}_${sIdx}`,
+      // 1. Cria a ficha completa vinculada ao WorkoutProgram e a marca como ativa
+      const createdProg = createProgram(
+        generatedPlan.planName,
+        generatedPlan.description,
+        generatedPlan.sessions.map((sess) => ({
           name: sess.name,
           description: `${sess.focus} • ${sess.dayOfWeek}`,
-          isSystem: false,
-          exercises: sess.exercises.map((ex, exIdx) => ({
-            id: `re_guided_${Date.now()}_${sIdx}_${exIdx}`,
+          exercises: sess.exercises.map((ex) => ({
             exerciseId: ex.exerciseId,
-            exerciseName: ex.exerciseName,
-            targetMuscle: ex.targetMuscle,
-            orderIndex: exIdx,
             targetSets: ex.targetSets,
             targetRepsMin: ex.targetRepsMin,
             targetRepsMax: ex.targetRepsMax,
             restSeconds: ex.restSeconds,
           })),
-        });
-      });
+        }))
+      );
+      setActiveProgram(createdProg.id);
 
       // 2. Atualiza a store global com as métricas fisiológicas
       const expMap: Record<ExperienceLevel, 'iniciante' | 'intermediario' | 'avancado'> = {
@@ -254,13 +251,13 @@ export default function OnboardingGuidedScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert(
-        'Plano Fisiológico Ativado!',
-        'Sua periodização personalizada foi calculada e gravada com sucesso no SQLite do heavy.io.',
-        [{ text: 'Acessar Treino', onPress: () => router.replace('/(tabs)' as any) }]
+        'Ficha Criada e Ativada!',
+        `A ficha "${createdProg.name}" foi calculada com sucesso pela IA e definida como a periodização ativa do seu ciclo.`,
+        [{ text: 'Acessar Treinos', onPress: () => router.replace('/(tabs)' as any) }]
       );
     } catch (err) {
-      console.error('Erro ao persistir rotinas guiadas:', err);
-      Alert.alert('Erro', 'Houve uma falha ao salvar as rotinas no banco local.');
+      console.error('Erro ao persistir ficha guiada:', err);
+      Alert.alert('Erro', 'Houve uma falha ao salvar a ficha no banco local.');
     }
   };
 

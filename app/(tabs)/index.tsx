@@ -349,18 +349,29 @@ export default function WorkoutScreen() {
           {otherRoutines.length > 0 && (
             <View style={styles.otherSection}>
               <View style={styles.sectionHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                   <Layers size={15} color={Theme.colors.textSecondary} />
-                  <Text style={styles.sectionTitle}>Outras Sessões da Grade</Text>
+                  <Text style={styles.sectionTitle}>Sessões da Grade</Text>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.manageRoutinesHeaderBtn}
-                  onPress={() => setIsRoutineManagerOpen(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.manageRoutinesHeaderBtnText}>Trocar Ficha</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.newRoutineHeaderBtn}
+                    onPress={() => setIsRoutineManagerOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Plus size={12} color={Theme.colors.textInverse} />
+                    <Text style={styles.newRoutineHeaderBtnText}>Nova Ficha</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.manageRoutinesHeaderBtn}
+                    onPress={() => setIsRoutineManagerOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.manageRoutinesHeaderBtnText}>Fichas</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {otherRoutines.map(routine => (
@@ -760,6 +771,20 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
+  },
+  newRoutineHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  newRoutineHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Theme.colors.textInverse,
   },
   routineCard: {
     backgroundColor: '#121215',
