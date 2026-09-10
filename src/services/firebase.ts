@@ -25,16 +25,12 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = (() => {
-  if (getApps().length > 0) {
+  if (Platform.OS === 'web') {
     try {
       return getAuth(app);
     } catch {
-      // not yet initialized
+      return initializeAuth(app);
     }
-  }
-  
-  if (Platform.OS === 'web') {
-    return getAuth(app);
   } else {
     try {
       // @ts-ignore

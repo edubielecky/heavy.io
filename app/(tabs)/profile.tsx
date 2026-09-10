@@ -57,7 +57,7 @@ import { RoutineManagementModal } from '../../src/components/RoutineManagementMo
 
 export default function AthleteControlCenterScreen() {
   const router = useRouter();
-  const { workoutHistory, loadFromDatabase } = useWorkoutStore();
+  const { workoutHistory, loadFromDatabase, discardActiveSession } = useWorkoutStore();
   const { 
     profile, 
     preferences, 
@@ -242,18 +242,37 @@ export default function AthleteControlCenterScreen() {
   const handleExecuteLogout = async () => {
     setIsLoggingOut(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    
+    // 1. Apaga qualquer treino ativo ou rascunho em andamento
     try {
-      await signOut(auth);
+      discardActiveSession();
+    } catch (err) {
+      console.warn('Erro ao descartar sessão de treino ativa no logout:', err);
+    }
+
+    // 2. Realiza o encerramento da sessão no Firebase se autenticado
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
     } catch (err) {
       console.warn('Erro ao deslogar do Firebase:', err);
     }
+
+    // 3. Reseta a store do usuário e limpa o armazenamento persistente local
     try {
       logout();
     } catch (err) {
       console.warn('Erro ao resetar userStore:', err);
     }
+
     setIsLogoutModalOpen(false);
     setIsLoggingOut(false);
+
+    // 4. Redireciona com segurança para a tela inicial (index / login)
+    if (router.canDismiss()) {
+      router.dismissAll();
+    }
     router.replace('/');
   };
 

@@ -125,10 +125,12 @@ export const useUserStore = create<UserStoreState>()(
 
       logout: () => {
         set({
-          userFlow: 'existing_user',
+          hasCompletedOnboarding: false,
+          userFlow: 'new_user',
           profile: null,
           onboardingTrack: null,
         });
+        AsyncStorage.removeItem('@heavy_io_user_storage').catch(() => {});
       },
     }),
     {
