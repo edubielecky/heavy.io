@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { useState, useMemo } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,7 @@ import {
   SessionDuration,
   WeeklyFrequency,
   generateGuidedRoutine,
+  generateAiGuidedRoutine,
 } from '../src/services/recommendationEngine';
 import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userStore';
 import Theme from '../src/theme/theme';
@@ -127,6 +129,8 @@ export default function OnboardingGuidedScreen() {
   // Passo Final: Plano Fisiológico Gerado
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [activeSessionIndex, setActiveSessionIndex] = useState<number>(0);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [generationStage, setGenerationStage] = useState('Consultando IA Fisiológica e Biomecânica...');
 
   // Submodal de Auditoria Biomecânica com IA
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -174,7 +178,7 @@ export default function OnboardingGuidedScreen() {
   const handleNextStep = () => {
     Haptics.selectionAsync().catch(() => {});
     const nextIndex = currentStepIndex + 1;
-    // Ao avançar para a última etapa (result), executa a síntese fisiológica
+    // Ao avançar para a última etapa (result), executa a síntese fisiológica com IA
     if (nextIndex === stepsOrder.length - 1) {
       const parsedAge = parseInt(age, 10) || profile?.age || 26;
       const parsedWeight = parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78;
@@ -194,13 +198,64 @@ export default function OnboardingGuidedScreen() {
         musclePriority,
       };
 
-      const plan = generateGuidedRoutine(inputs);
-      setGeneratedPlan(plan);
-      setActiveSessionIndex(0);
       setCurrentStepIndex(nextIndex);
+      setIsGeneratingPlan(true);
+      setGenerationStage('Calibrando alavancas articulares e catálogo de exercícios...');
+
+      generateAiGuidedRoutine(inputs)
+        .then((plan) => {
+          setGeneratedPlan(plan);
+          setActiveSessionIndex(0);
+        })
+        .catch((err) => {
+          console.warn('Recorrendo ao motor cinemático local:', err);
+          const fallback = generateGuidedRoutine(inputs);
+          setGeneratedPlan(fallback);
+          setActiveSessionIndex(0);
+        })
+        .finally(() => {
+          setIsGeneratingPlan(false);
+        });
     } else if (nextIndex < stepsOrder.length) {
       setCurrentStepIndex(nextIndex);
     }
+  };
+
+  const handleRegenerateWithAi = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const parsedAge = parseInt(age, 10) || profile?.age || 26;
+    const parsedWeight = parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78;
+    const parsedHeight = parseFloat(height.replace(',', '.')) || profile?.heightCm || 176;
+
+    const inputs: GuidedInputs = {
+      frequency,
+      sessionDuration: duration,
+      goal,
+      experienceLevel: experience,
+      equipment,
+      restrictions,
+      biologicalSex,
+      age: parsedAge,
+      weightKg: parsedWeight,
+      heightCm: parsedHeight,
+      musclePriority,
+    };
+
+    setIsGeneratingPlan(true);
+    setGenerationStage('Formulando nova combinação biomecânica com IA...');
+
+    generateAiGuidedRoutine(inputs)
+      .then((plan) => {
+        setGeneratedPlan(plan);
+        setActiveSessionIndex(0);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      })
+      .catch((err) => {
+        console.warn('Falha ao regerar com IA:', err);
+      })
+      .finally(() => {
+        setIsGeneratingPlan(false);
+      });
   };
 
   const handlePrevStep = () => {
@@ -819,13 +874,66 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 9: PRESCRIÇÃO CIENTÍFICA DO TREINO                  */}
         {/* ========================================================= */}
-        {currentStepKey === 'result' && generatedPlan && (
+        {currentStepKey === 'result' && isGeneratingPlan && (
+          <View style={styles.aiLoadingContainer}>
+            <View style={styles.aiLoadingHeader}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={styles.aiLoadingTitle}>PRESCRIÇÃO CIENTÍFICA INDIVIDUAL</Text>
+            </View>
+            <Text style={styles.aiLoadingStageText}>{generationStage}</Text>
+
+            <View style={styles.aiLoadingMetricsBox}>
+              <View style={styles.aiLoadingMetricRow}>
+                <Text style={styles.aiLoadingMetricLabel}>Atleta</Text>
+                <Text style={styles.aiLoadingMetricValue}>
+                  {biologicalSex === 'female' ? 'Feminino' : 'Masculino'} • {age}a • {weight}kg • {height}cm
+                </Text>
+              </View>
+              <View style={styles.aiLoadingMetricRow}>
+                <Text style={styles.aiLoadingMetricLabel}>Foco Muscular</Text>
+                <Text style={styles.aiLoadingMetricValue}>
+                  {musclePriority === 'balanced' ? 'Equilíbrio Fisiológico' :
+                   musclePriority === 'chest' ? 'Peitoral' :
+                   musclePriority === 'back' ? 'Costas & Dorsais' :
+                   musclePriority === 'legs_glutes' ? 'Pernas & Glúteos' :
+                   musclePriority === 'shoulders' ? 'Deltoides' : 'Braços'}
+                </Text>
+              </View>
+              <View style={styles.aiLoadingMetricRow}>
+                <Text style={styles.aiLoadingMetricLabel}>Estrutura</Text>
+                <Text style={styles.aiLoadingMetricValue}>
+                  {frequency} dias/sem • {duration} min/sessão
+                </Text>
+              </View>
+              <View style={styles.aiLoadingMetricRow}>
+                <Text style={styles.aiLoadingMetricLabel}>Parâmetros</Text>
+                <Text style={styles.aiLoadingMetricValue}>
+                  SFR • Alongamento Passivo • Simão et al.
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.aiLoadingHint}>
+              IA Gemini 3.6 Flash consultando catálogo de mais de 120 exercícios.
+            </Text>
+          </View>
+        )}
+
+        {currentStepKey === 'result' && !isGeneratingPlan && generatedPlan && (
           <View>
             {/* Header do Plano Gerado */}
             <View style={styles.planHeaderCard}>
               <View style={styles.planHeaderTop}>
-                <View style={styles.splitBadge}>
-                  <Text style={styles.splitBadgeText}>{generatedPlan.splitType.toUpperCase()}</Text>
+                <View style={styles.planBadgeGroup}>
+                  <View style={styles.splitBadge}>
+                    <Text style={styles.splitBadgeText}>{generatedPlan.splitType.toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.aiPlanBadge}>
+                    <Sparkles size={10} color="#FFFFFF" />
+                    <Text style={styles.aiPlanBadgeText}>
+                      {generatedPlan.isAiGenerated ? 'IA GEMINI 3.6 FLASH' : 'MOTOR LOCAL'}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.volumeText}>
                   ~{generatedPlan.weeklyDirectSetsPerMuscle} séries/semana
@@ -901,17 +1009,28 @@ export default function OnboardingGuidedScreen() {
               <Text style={styles.aiAuditBannerDesc}>
                 Distribuição validada quanto ao estresse lombo-pélvico, equilíbrio Push/Pull e marcos MAV de hipertrofia muscular.
               </Text>
-              <TouchableOpacity
-                style={styles.aiAuditOpenBtn}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setIsAuditModalOpen(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <Sparkles size={13} color={Theme.colors.textInverse} />
-                <Text style={styles.aiAuditOpenBtnText}>Abrir Diagnóstico Biomecânico Completo</Text>
-              </TouchableOpacity>
+              <View style={styles.aiAuditBtnRow}>
+                <TouchableOpacity
+                  style={styles.aiAuditOpenBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setIsAuditModalOpen(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Sparkles size={13} color={Theme.colors.textInverse} />
+                  <Text style={styles.aiAuditOpenBtnText}>Diagnóstico Biomecânico</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.aiAuditRegenBtn}
+                  onPress={handleRegenerateWithAi}
+                  activeOpacity={0.8}
+                >
+                  <RefreshCw size={12} color="#FFFFFF" />
+                  <Text style={styles.aiAuditRegenBtnText}>Regerar com IA</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Abas das Sessões */}
@@ -1336,6 +1455,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  planBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   splitBadge: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 8,
@@ -1346,6 +1470,23 @@ const styles = StyleSheet.create({
     color: '#09090B',
     fontSize: 10,
     fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  aiPlanBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#18181B',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  aiPlanBadgeText: {
+    color: '#E4E4E7',
+    fontSize: 9,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   volumeText: {
@@ -1659,21 +1800,108 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
     lineHeight: 16,
   },
+  aiAuditBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
   aiAuditOpenBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
     borderRadius: 6,
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    marginTop: 4,
   },
   aiAuditOpenBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#09090B',
     letterSpacing: 0.3,
+  },
+  aiAuditRegenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#18181B',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  aiAuditRegenBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#D4D4D8',
+    letterSpacing: 0.3,
+  },
+  aiLoadingContainer: {
+    backgroundColor: '#121215',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 380,
+    marginTop: 12,
+  },
+  aiLoadingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  aiLoadingTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  aiLoadingStageText: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  aiLoadingMetricsBox: {
+    width: '100%',
+    backgroundColor: '#18181B',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    padding: 14,
+    gap: 10,
+    marginBottom: 20,
+  },
+  aiLoadingMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiLoadingMetricLabel: {
+    color: '#71717A',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  aiLoadingMetricValue: {
+    color: '#E4E4E7',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  aiLoadingHint: {
+    color: '#71717A',
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 14,
   },
 });
