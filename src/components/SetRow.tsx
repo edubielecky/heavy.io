@@ -28,12 +28,20 @@ export const SetRow: React.FC<SetRowProps> = ({
   onToggleComplete,
   onDelete,
 }) => {
+  // Determina se as repetições atuais são apenas a sugestão inicial padrão
+  const isSuggestedGhostReps = !set.completed && (
+    set.reps === 0 || 
+    set.reps === targetRepsMin || 
+    set.reps === previousReps ||
+    (set.reps === 10 && !targetRepsMin && !previousReps)
+  );
+
   // Estado local para digitação fluida sem interrupções de render/parsing
   const [weightText, setWeightText] = useState<string>(() =>
     set.weightKg === 0 ? '' : String(set.weightKg)
   );
   const [repsText, setRepsText] = useState<string>(() =>
-    set.reps === 0 ? '' : String(set.reps)
+    isSuggestedGhostReps ? '' : (set.reps === 0 ? '' : String(set.reps))
   );
 
   const [isWeightFocused, setIsWeightFocused] = useState(false);
@@ -50,13 +58,17 @@ export const SetRow: React.FC<SetRowProps> = ({
   }, [set.weightKg]);
 
   useEffect(() => {
+    // Se a série não estiver completada e for igual à sugestão, mantém o campo vazio para o placeholder apagado
+    if (!set.completed && (set.reps === 0 || set.reps === targetRepsMin || set.reps === previousReps)) {
+      if (repsText === '') return;
+    }
     const formatted = set.reps === 0 ? '' : String(set.reps);
     const currentParsed = parseInt(repsText, 10);
     const propVal = set.reps;
     if (isNaN(currentParsed) ? propVal !== 0 : currentParsed !== propVal) {
       setRepsText(formatted);
     }
-  }, [set.reps]);
+  }, [set.reps, set.completed, targetRepsMin, previousReps]);
 
   const getBadgeStyle = (type: SetType) => {
     switch (type) {
@@ -215,7 +227,7 @@ export const SetRow: React.FC<SetRowProps> = ({
           selectTextOnFocus
           value={weightText}
           placeholder={weightPlaceholder}
-          placeholderTextColor={Theme.colors.borderLight}
+          placeholderTextColor="rgba(255, 255, 255, 0.22)"
           onChangeText={handleWeightChange}
           onFocus={() => setIsWeightFocused(true)}
           onBlur={handleWeightBlur}
@@ -243,7 +255,7 @@ export const SetRow: React.FC<SetRowProps> = ({
           selectTextOnFocus
           value={repsText}
           placeholder={repsPlaceholder}
-          placeholderTextColor={Theme.colors.borderLight}
+          placeholderTextColor="rgba(255, 255, 255, 0.22)"
           onChangeText={handleRepsChange}
           onFocus={() => setIsRepsFocused(true)}
           onBlur={handleRepsBlur}

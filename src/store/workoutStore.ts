@@ -209,7 +209,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
               setNumber: sIdx,
               type: (ghostSet?.type as SetType) || 'normal',
               weightKg: initialWeight,
-              reps: initialReps,
+              reps: 0,
               rpe: ghostSet?.rpe,
               rir: ghostSet?.rir,
               completed: false,
@@ -331,7 +331,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
               setNumber: 1,
               type: 'normal',
               weightKg: 0,
-              reps: 10,
+              reps: 0,
               completed: false,
             },
           ],
@@ -451,7 +451,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
             setNumber: we.sets.length + 1,
             type,
             weightKg: lastSet ? lastSet.weightKg : 0,
-            reps: lastSet ? lastSet.reps : 10,
+            reps: 0,
             completed: false,
           };
           return { ...we, sets: [...we.sets, newSet] };
