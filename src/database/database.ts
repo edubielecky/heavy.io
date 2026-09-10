@@ -1460,10 +1460,7 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
   const totalVolumeKg = Math.round(stats?.total_volume || 0);
   const totalSets = stats?.completed_sets || 0;
 
-  // Calcula estimativa de gasto calórico ativo (MET 5.5) e frequência cardíaca média / pico
-  const durationMinutes = durationSeconds / 60;
-  const activeCalories = Math.max(45, Math.round((durationMinutes * 5.5 * 80) / 60));
-
+  // Busca se alguma série teve peakBpm registrado via sensor/Health Connect
   const setBpmRows = db.getAllSync<{ peak_bpm: number | null }>(
     `SELECT ws.peak_bpm 
      FROM workout_sets ws
@@ -1473,8 +1470,13 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
   );
 
   const bpms = setBpmRows.map(r => r.peak_bpm).filter((b): b is number => b !== null && b > 0);
-  const peakHeartRate = bpms.length > 0 ? Math.max(...bpms) : (session.peakHeartRate || 158);
-  const avgHeartRate = bpms.length > 0 ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : (session.avgHeartRate || 126);
+  const peakHeartRate = bpms.length > 0 
+    ? Math.max(...bpms) 
+    : (session.peakHeartRate && session.peakHeartRate > 0 ? session.peakHeartRate : null);
+  const avgHeartRate = bpms.length > 0 
+    ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) 
+    : (session.avgHeartRate && session.avgHeartRate > 0 ? session.avgHeartRate : null);
+  const activeCalories = (session.activeCalories && session.activeCalories > 0) ? session.activeCalories : null;
 
   db.runSync(
     `UPDATE workout_sessions 
@@ -1486,7 +1488,6 @@ export const completeWorkout = (sessionId: string): WorkoutSession | null => {
 
   const completedSession = getWorkoutSession(sessionId);
 
-  // 1. Grava localmente primeiro na fila de sincronização (Sync Queue)
   if (completedSession) {
     enqueueForSync('workout_session', sessionId, completedSession);
 

@@ -40,6 +40,15 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
 }) => {
   if (!session) return null;
 
+  // Validação estrita de dados biométricos (Health Connect / Apple Health)
+  // Elimina mocks legados (126 e 158) e nunca exibe estimativas sintéticas se não conectado.
+  const isLegacyMockBpm = session.avgHeartRate === 126 && session.peakHeartRate === 158;
+  const validAvgBpm = !isLegacyMockBpm && typeof session.avgHeartRate === 'number' && session.avgHeartRate > 0 ? session.avgHeartRate : null;
+  const validPeakBpm = !isLegacyMockBpm && typeof session.peakHeartRate === 'number' && session.peakHeartRate > 0 ? session.peakHeartRate : null;
+  const validCalories = typeof session.activeCalories === 'number' && session.activeCalories > 0 ? session.activeCalories : null;
+
+  const hasHealthData = Boolean(validAvgBpm || validPeakBpm || validCalories);
+
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -68,11 +77,11 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
       .map(e => `• ${e.exerciseName}: ${e.sets.filter(s => s.completed).length} séries`)
       .join('\n');
 
-    const bpmText = session.avgHeartRate 
-      ? `\n💓 Freq. Cardíaca: ${session.avgHeartRate} BPM Médio (Pico: ${session.peakHeartRate || session.avgHeartRate} BPM)`
+    const bpmText = validAvgBpm 
+      ? `\n💓 Freq. Cardíaca: ${validAvgBpm} BPM Médio (Pico: ${validPeakBpm || validAvgBpm} BPM)`
       : '';
-    const caloriesText = session.activeCalories
-      ? `\n🔥 Gasto Ativo: ${session.activeCalories} kcal`
+    const caloriesText = validCalories
+      ? `\n🔥 Gasto Ativo: ${validCalories} kcal`
       : '';
 
     const message = 
@@ -156,38 +165,46 @@ ${exercisesSummary}
               </View>
             </View>
 
-            {/* Grid de Biometria & Saúde (Apple Health / Google Health Connect) */}
-            <View style={[styles.statsGrid, { marginTop: 8 }]}>
-              <View style={styles.statCard}>
-                <View style={styles.statIconWrap}>
-                  <Activity size={16} color="#10B981" />
-                </View>
-                <Text style={styles.statValue}>
-                  {session.avgHeartRate || 126} <Text style={styles.statUnit}>BPM</Text>
-                </Text>
-                <Text style={styles.statLabel}>BPM Médio</Text>
-              </View>
+            {/* Grid de Biometria & Saúde (Google Health Connect / Apple Health) - Exibido somente se houver dados recebidos */}
+            {hasHealthData && (
+              <View style={[styles.statsGrid, { marginTop: 8 }]}>
+                {validAvgBpm !== null && (
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconWrap}>
+                      <Activity size={16} color="#10B981" />
+                    </View>
+                    <Text style={styles.statValue}>
+                      {validAvgBpm} <Text style={styles.statUnit}>BPM</Text>
+                    </Text>
+                    <Text style={styles.statLabel}>BPM Médio</Text>
+                  </View>
+                )}
 
-              <View style={styles.statCard}>
-                <View style={styles.statIconWrap}>
-                  <Heart size={16} color="#EF4444" />
-                </View>
-                <Text style={styles.statValue}>
-                  {session.peakHeartRate || 158} <Text style={styles.statUnit}>BPM</Text>
-                </Text>
-                <Text style={styles.statLabel}>Pico da Sessão</Text>
-              </View>
+                {validPeakBpm !== null && (
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconWrap}>
+                      <Heart size={16} color="#EF4444" />
+                    </View>
+                    <Text style={styles.statValue}>
+                      {validPeakBpm} <Text style={styles.statUnit}>BPM</Text>
+                    </Text>
+                    <Text style={styles.statLabel}>Pico da Sessão</Text>
+                  </View>
+                )}
 
-              <View style={styles.statCard}>
-                <View style={styles.statIconWrap}>
-                  <Flame size={16} color="#F59E0B" />
-                </View>
-                <Text style={styles.statValue}>
-                  {session.activeCalories || Math.max(45, Math.round(((session.durationSeconds || 1800) / 60 * 5.5 * 80) / 60))} <Text style={styles.statUnit}>kcal</Text>
-                </Text>
-                <Text style={styles.statLabel}>Gasto Ativo</Text>
+                {validCalories !== null && (
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconWrap}>
+                      <Flame size={16} color="#F59E0B" />
+                    </View>
+                    <Text style={styles.statValue}>
+                      {validCalories} <Text style={styles.statUnit}>kcal</Text>
+                    </Text>
+                    <Text style={styles.statLabel}>Gasto Ativo</Text>
+                  </View>
+                )}
               </View>
-            </View>
+            )}
 
             {/* Seção de Recordes Pessoais (PRs) */}
             <View style={styles.sectionHeader}>
