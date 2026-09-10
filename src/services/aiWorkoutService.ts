@@ -137,23 +137,26 @@ const HIGH_AXIAL_EXERCISE_IDS = new Set<string>([
 
 /**
  * Exercícios com estímulo sob alongamento comprovado (Stretch-Mediated Hypertrophy)
+ * NOTA: triceps_kickback_dumbbell foi REMOVIDO — o coice tem tensão máxima no encurtamento,
+ * NÃO no alongamento (Maeo et al., 2021). Para hipertrofia sob alongamento no tríceps,
+ * usar overhead_cable_triceps_extension_rope ou overhead_dumbbell_triceps_extension_seated.
  */
 const STRETCH_EXERCISE_IDS = new Set<string>([
   'seated_leg_curl_machine',
   'romanian_deadlift_barbell',
   'stiff_leg_deadlift_barbell',
   'dumbbell_romanian_deadlift',
-  'cable_overhead_triceps_extension_rope',
-  'dumbbell_overhead_triceps_extension_seated',
+  'overhead_cable_triceps_extension_rope',
+  'overhead_dumbbell_triceps_extension_seated',
   'skull_crushers_ez_bar_incline',
   'incline_dumbbell_curl',
   'standing_calf_raise_machine',
+  'seated_calf_raise_machine',  // sóleo: tensão máxima com joelho flexionado
   'leg_press_calf_raise',
   'dumbbell_bench_press',
   'incline_dumbbell_bench_press',
   'cable_fly_mid_pulley',
   'cable_fly_low_to_high',
-  'barbell_front_squat',
   'leg_press_45_degree',
   'hack_squat_machine',
   'dumbbell_bulgarian_split_squat',

@@ -805,6 +805,17 @@ export const deleteWorkoutSession = (sessionId: string): void => {
   if (!isInitialized) initDatabase();
   workoutSessions = workoutSessions.filter(s => s.id !== sessionId);
   storageSet(STORAGE_KEYS.SESSIONS, workoutSessions);
+
+  let prsChanged = false;
+  Object.keys(personalRecords).forEach(key => {
+    if (personalRecords[key].achievedSessionId === sessionId) {
+      delete personalRecords[key];
+      prsChanged = true;
+    }
+  });
+  if (prsChanged) {
+    storageSet(STORAGE_KEYS.PRS, personalRecords);
+  }
 };
 
 export const saveActiveSessionDraft = (session: WorkoutSession): void => {

@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Calendar, Clock, Weight, Dumbbell, Trophy, Check, Award, Flame } from 'lucide-react-native';
+import { X, Calendar, Clock, Weight, Dumbbell, Trophy, Check, Award, Flame, Trash2 } from 'lucide-react-native';
 import Theme from '../theme/theme';
 import { WorkoutSession, WorkoutExercise, PersonalRecord } from '../types/workout';
 import { getWorkoutSession, getSessionPRs } from '../database/database';
@@ -17,12 +17,14 @@ interface WorkoutDetailModalProps {
   visible: boolean;
   onClose: () => void;
   session: WorkoutSession | null;
+  onDelete?: (session: WorkoutSession) => void;
 }
 
 export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({
   visible,
   onClose,
   session,
+  onDelete,
 }) => {
   // Busca dados completos atualizados da sessão e os PRs batidos
   const { detailedSession, sessionPRs } = useMemo(() => {
@@ -87,9 +89,20 @@ export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({
               </View>
             </View>
 
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.8}>
-              <X size={20} color={Theme.colors.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.headerRightActions}>
+              {onDelete && (
+                <TouchableOpacity
+                  style={styles.headerDeleteBtn}
+                  onPress={() => onDelete(detailedSession)}
+                  activeOpacity={0.8}
+                >
+                  <Trash2 size={17} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.8}>
+                <X size={20} color={Theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -226,6 +239,18 @@ export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({
                 );
               })}
             </View>
+
+            {/* Ação de Exclusão do Treino */}
+            {onDelete && (
+              <TouchableOpacity
+                style={styles.deleteWorkoutBtn}
+                onPress={() => onDelete(detailedSession)}
+                activeOpacity={0.8}
+              >
+                <Trash2 size={15} color="#EF4444" />
+                <Text style={styles.deleteWorkoutBtnText}>Excluir Treino do Histórico</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -473,5 +498,38 @@ const styles = StyleSheet.create({
   uncompletedDash: {
     color: Theme.colors.textMuted,
     fontSize: 12,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  deleteWorkoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    paddingVertical: 14,
+    borderRadius: Theme.borderRadius.md,
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 24,
+  },
+  deleteWorkoutBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });

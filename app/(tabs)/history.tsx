@@ -4,7 +4,8 @@ import {
   Text, 
   StyleSheet, 
   FlatList, 
-  TouchableOpacity 
+  TouchableOpacity,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -17,7 +18,9 @@ import {
   Trophy, 
   ChevronRight, 
   Activity,
-  Flame
+  Flame,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { WorkoutSession } from '../../src/types/workout';
@@ -26,9 +29,10 @@ import { getSessionPRs } from '../../src/database/database';
 import Theme from '../../src/theme/theme';
 
 export default function HistoryScreen() {
-  const { workoutHistory, loadFromDatabase } = useWorkoutStore();
+  const { workoutHistory, loadFromDatabase, deleteWorkoutFromHistory } = useWorkoutStore();
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<WorkoutSession | null>(null);
 
   // Recarrega dados sempre que a aba History ganha foco
   useFocusEffect(
@@ -69,6 +73,23 @@ export default function HistoryScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedSession(session);
     setDetailModalVisible(true);
+  };
+
+  const handleRequestDelete = (session: WorkoutSession) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSessionToDelete(session);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!sessionToDelete) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    const id = sessionToDelete.id;
+    deleteWorkoutFromHistory(id);
+    setSessionToDelete(null);
+    if (selectedSession?.id === id) {
+      setDetailModalVisible(false);
+      setSelectedSession(null);
+    }
   };
 
   return (
@@ -126,9 +147,23 @@ export default function HistoryScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.durationBadge}>
-                    <Clock size={12} color={Theme.colors.primary} />
-                    <Text style={styles.durationText}>{formatDuration(item.durationSeconds)}</Text>
+                  <View style={styles.cardActionsRow}>
+                    <View style={styles.durationBadge}>
+                      <Clock size={12} color={Theme.colors.primary} />
+                      <Text style={styles.durationText}>{formatDuration(item.durationSeconds)}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.cardTrashBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRequestDelete(item);
+                      }}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Trash2 size={14} color={Theme.colors.textMuted} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -208,7 +243,51 @@ export default function HistoryScreen() {
           visible={detailModalVisible}
           onClose={() => setDetailModalVisible(false)}
           session={selectedSession}
+          onDelete={handleRequestDelete}
         />
+
+        {/* Modal de Confirmação de Exclusão */}
+        <Modal
+          visible={!!sessionToDelete}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSessionToDelete(null)}
+        >
+          <View style={styles.deleteModalOverlay}>
+            <View style={styles.deleteModalCard}>
+              <View style={styles.deleteModalHeader}>
+                <View style={styles.deleteIconBadge}>
+                  <AlertTriangle size={20} color="#EF4444" />
+                </View>
+                <Text style={styles.deleteModalTitle}>Excluir Treino?</Text>
+              </View>
+
+              <Text style={styles.deleteModalText}>
+                Tem certeza que deseja excluir o treino{' '}
+                <Text style={styles.deleteModalWorkoutName}>"{sessionToDelete?.name}"</Text> do seu histórico? Esta ação é irreversível e removerá os dados de tonelagem e eventuais recordes registrados nesta sessão.
+              </Text>
+
+              <View style={styles.deleteModalActions}>
+                <TouchableOpacity
+                  style={styles.deleteCancelBtn}
+                  onPress={() => setSessionToDelete(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.deleteCancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteConfirmBtn}
+                  onPress={handleConfirmDelete}
+                  activeOpacity={0.8}
+                >
+                  <Trash2 size={15} color="#FFFFFF" />
+                  <Text style={styles.deleteConfirmBtnText}>Excluir</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -421,5 +500,98 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardTrashBtn: {
+    padding: 6,
+    borderRadius: Theme.borderRadius.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  deleteModalCard: {
+    backgroundColor: '#121215',
+    borderRadius: Theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    padding: 20,
+    width: '100%',
+    maxWidth: 380,
+  },
+  deleteModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  deleteIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  deleteModalText: {
+    fontSize: 13,
+    color: Theme.colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  deleteModalWorkoutName: {
+    color: Theme.colors.text,
+    fontWeight: '700',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  deleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+  },
+  deleteConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteConfirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

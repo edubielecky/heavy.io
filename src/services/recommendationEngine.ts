@@ -83,28 +83,72 @@ export interface GeneratedPlan {
 /**
  * Mapeamento de exercícios com alta sobrecarga na posição alongada (Stretch-Mediated Hypertrophy)
  * Fonte: Pedrosa et al. (2022), Maeo et al. (2021), Kassiano et al. (2023)
+ *
+ * NOTA: triceps_kickback_dumbbell foi EXCLUÍDO — o coíce tem tensão máxima no encurtamento
+ * (posição final), NÃO no alongamento. Para hipertrofia sob alongamento no tríceps use:
+ *   overhead_cable_triceps_extension_rope   (Francês na polia — alta tensão com cotovelos à frente)
+ *   overhead_dumbbell_triceps_extension_seated  (Francês com halter)
+ *   skull_crushers_ez_bar_incline
  */
 const STRETCH_MEDIATED_EXERCISE_IDS = new Set<string>([
   'seated_leg_curl_machine',
   'romanian_deadlift_barbell',
   'stiff_leg_deadlift_barbell',
   'dumbbell_romanian_deadlift',
-  'cable_overhead_triceps_extension_rope',
-  'dumbbell_overhead_triceps_extension_seated',
+  'overhead_cable_triceps_extension_rope',
+  'overhead_dumbbell_triceps_extension_seated',
   'skull_crushers_ez_bar_incline',
   'incline_dumbbell_curl',
   'standing_calf_raise_machine',
+  'seated_calf_raise_machine',   // sóleo: joelho flexionado = maior tensão no sóleo em elongamento
   'leg_press_calf_raise',
   'dumbbell_bench_press',
   'incline_dumbbell_bench_press',
   'cable_fly_mid_pulley',
-  'barbell_front_squat',
+  'cable_fly_low_to_high',
   'leg_press_45_degree',
   'hack_squat_machine',
   'dumbbell_bulgarian_split_squat',
   'cable_lat_pulldown_wide',
   'lat_pulldown_close_grip_v_bar',
 ]);
+
+/**
+ * Exercícios que NÃO devem receber o bônus de stretch_isolation.
+ * Inclui exercícios cuja tensão máxima ocorre no encurtamento (peak contraction),
+ * não no alongamento.
+ */
+const ANTI_STRETCH_EXERCISE_IDS = new Set<string>([
+  'triceps_kickback_dumbbell',  // Tensão máxima no encurtamento — usar Francês na Polia
+  'barbell_front_squat',        // Em 10-12 reps falha o lombar antes dos quadríceps
+]);
+
+/**
+ * Exercícios de elevação lateral para deltoide lateral.
+ * OBRIGATÓRIO em dias Push — o deltoide anterior já é sobrecarregado pelos supinos;
+ * sem elevação lateral, o deltoide lateral fica sub-estimulado.
+ */
+const LATERAL_RAISE_IDS = new Set<string>([
+  'dumbbell_lateral_raise_standing',
+  'dumbbell_lateral_raise_seated',
+  'cable_lateral_raise_single_arm',
+  'cable_lateral_raise_behind_back',
+  'cable_lateral_raise',
+  'machine_lateral_raise',
+  'incline_bench_cable_lateral_raise',
+]);
+
+/**
+ * Exercícios de delta posterior / retratores escapulares.
+ * SÃO exercícios de Pull biomecânicamente — devem aparecer SOMENTE em dias Pull,
+ * nunca em dias Push.
+ */
+const REAR_DELT_PUSH_PENALTY_IDS = new Set<string>([
+  'reverse_pec_deck_fly',
+  'bent_over_dumbbell_rear_delt_fly',
+  'cable_face_pull',
+]);
+
 
 /**
  * Mapeamento de exercícios contraindicados por restrições articulares
@@ -345,12 +389,40 @@ function scoreExerciseCandidate(
     if (STRETCH_MEDIATED_EXERCISE_IDS.has(ex.id)) {
       score += 50;
     }
+    // Penalização cirúrgica de exercícios sem perfil de tensão no alongamento
+    if (ANTI_STRETCH_EXERCISE_IDS.has(ex.id)) {
+      score -= 200; // Veto efetivo: coíce e front squat em tiers de alongamento
+    }
   }
 
   // 4. Pico de Contração e Tensão Contínua
   if (criteria.tier === 'peak_contraction') {
     if (ex.equipment === 'cable' || ex.equipment === 'machine') {
       score += 35;
+    }
+    // Bonus para Elevação Lateral em dias de ombros — deltoide lateral é sub-estimulado
+    // por desenvolvimentos e supinos (trabalham deltoide anterior)
+    if (criteria.targetMuscle === 'ombros' && LATERAL_RAISE_IDS.has(ex.id)) {
+      score += 60; // Garante que elevação lateral apareça antes de outros isoladores de ombros
+    }
+  }
+
+  // 4b. Bonus de Elevação Lateral também em stretch_isolation para ombros
+  if (criteria.tier === 'stretch_isolation' && criteria.targetMuscle === 'ombros') {
+    if (LATERAL_RAISE_IDS.has(ex.id)) {
+      score += 50;
+    }
+  }
+
+  // 4c. Veto de exercícios de deltoide posterior em contexto de Push
+  // Crucifixo Inverso e Rear Delt Fly são exercícios de Pull — devem ir para dias Pull
+  if (REAR_DELT_PUSH_PENALTY_IDS.has(ex.id) && criteria.targetMuscle === 'ombros') {
+    // Só penaliza se o exercício for para o ‘slot de ombros em Push’;
+    // em Pull (trapézio/ombros nesse contexto) deixa passar normalmente.
+    // Identificamos Push quando preferredPatterns inclui vertical_push
+    const patterns = criteria.preferredPatterns || [];
+    if (patterns.includes('vertical_push') || patterns.includes('isolation')) {
+      score -= 180;
     }
   }
 
@@ -730,12 +802,12 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
 
     // Dia 5: Legs Hipertrofia & Detalhe
     const s5: PlannedExercise[] = [];
-    s5.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora
+    s5.push(createPlannedEx('isquiotibiais', 'stretch_isolation', ['isolation'])); // Cadeira Flexora Sentada
     s5.push(createPlannedEx('quadriceps', 'stretch_isolation', ['squat', 'lunge'])); // Hack / Leg Press
     s5.push(createPlannedEx('isquiotibiais', 'secondary_compound', ['hinge'])); // Stiff
     s5.push(createPlannedEx('quadriceps', 'peak_contraction', ['isolation'])); // Cadeira Extensora
-    if (exCount >= 5) s5.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
-    if (exCount >= 6) s5.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise']));
+    if (exCount >= 5) s5.push(createPlannedEx('panturrilhas', 'stretch_isolation', ['calf_raise'])); // Gêmeos Sentado (Sóleo)
+    if (exCount >= 6) s5.push(createPlannedEx('gluteos', 'stretch_isolation', ['hinge']));
 
     sessions = [
       { id: 'guided_h5_u', name: 'Treino A - Superiores (Foco Força & Tensão)', focus: 'Peitoral, Costas & Ombros', dayOfWeek: 'Segunda-feira', exercises: s1 },
@@ -1018,9 +1090,16 @@ export async function generateAiGuidedRoutine(
   options?: { apiKey?: string; timeoutMs?: number }
 ): Promise<GeneratedPlan> {
   const available = getAvailableExercises(inputs);
-  const apiKey = options?.apiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  const apiKey = (options?.apiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim();
 
   if (!apiKey || apiKey.trim().length === 0 || !available || available.length === 0) {
+    console.warn('[heavy.io] Chave de API ausente ou catálogo vazio — usando motor local.');
+    return generateGuidedRoutine(inputs);
+  }
+
+  const trimmedKey = apiKey.trim();
+  if (trimmedKey.length < 10) {
+    console.warn('[heavy.io] Chave de API muito curta ou ausente — usando motor local.');
     return generateGuidedRoutine(inputs);
   }
 
@@ -1090,7 +1169,17 @@ O heavy.io é um aplicativo minimalista, sério e de precisão mecânica para at
 Sua missão é conceber uma periodização 100% individualizada e cirúrgica para o atleta descrito.
 Você tem acesso e conhecimento irrestrito sobre a biomecânica mundial e cinesiologia aplicada.
 NÃO prescreva divisões genéricas pré-concebidas: com base na frequência semanal fornecida, você mesmo deve determinar a divisão ótima (split) para este atleta.
-Responda ESTRITAMENTE em formato JSON válido, sem qualquer texto fora do JSON e sem tags markdown.`;
+Responda ESTRITAMENTE em formato JSON válido, sem qualquer texto fora do JSON e sem tags markdown.
+
+REGRAS BIOMECÂNICAS OBRIGATÓRIAS (violações causam prescrição clínica inadequada):
+1. TRÍCEPS COICE (Kickback): PROIBIDO como exercício de isolamento em posição de alongamento (stretch_isolation). O coice tem tensão máxima no encurtamento, não no alongamento. Para tríceps em posição de alongamento OBRIGATORIAMENTE usar: Tríceps Francês na Polia (overhead cable extension) ou Tríceps Francês com Halter Sentado.
+2. ELEVAÇÃO LATERAL: É OBRIGATÓRIA em dias Push/Superiores — o deltóide lateral não é estimulado pelos supinos e desenvolvimentos (que sobrecarregam o deltóide anterior). Inclua SEMPRE pelo menos 1 isolamento de deltóide lateral (Elevação Lateral com Halteres, na Polia ou na Máquina) em cada dia Push ou Superior.
+3. CRUCIFIXO INVERSO / REAR DELT FLY: É um exercício de PULL, não de Push. O crucifixo inverso, peck deck inverso e voador inverso trabalham o deltóide posterior e retratores escapulares. Coloque-os EXCLUSIVAMENTE em dias Pull ou Back — NUNCA em dias Push.
+4. SEQUÊNCIA PULL: Em dias Pull, o(s) exercício(s) de grande dorsal (Puxada, Remada) DEVEM vir ANTES dos exercícios de bíceps. Ordem correta: 1°) Puxada/Remada de Costas → 2°) Acessórios de Costas → 3°) Bíceps.
+5. FRONT SQUAT EM ALTAS REPETIÇÕES: Agachamento Frontal (Front Squat) em 10-12+ reps falha os eretores da espinha antes de estimular os quadríceps. Para faixas de repetições altas (≥10 reps) ou tiers de isolamento/alongamento, prefira: Hack Squat na Máquina, Agachamento no Leg Press 45°, Agachamento Búlgaro com Halteres (split squat).
+6. PANTURRILHAS em splits de 5+ dias: O treino de pernas com foco em hipertrofia/detalhe (Legs B / Treino E) DEVE incluir pelo menos 1 série de Panturrilha Sentada na Máquina (Seated Calf Raise) para estimular o músculo sóleo (que só é ativado com o joelho flexionado).
+7. NOMES EM PORTUGUÊS: Todos os nomes de exercícios devem ser descritivos em português brasileiro.
+8. CONCISÃO: Seja objetivo nas justificativas textuais (máximo 1 frase curta por exercício e resumo) para síntese ágil.`;
 
   const prompt = `Prescreva uma periodização científica de alta performance para o seguinte atleta do heavy.io:
 
@@ -1113,7 +1202,7 @@ DADOS BIOLÓGICOS E ANTROPOMÉTRICOS COMPLETOS:
 SUA TAREFA DE FISIOLOGIA APLICADA:
 1. DETERMINAÇÃO DA DIVISÃO (SPLIT): Com base na frequência de ${effectiveInputs.frequency} dias por semana, determine a divisão de treino ideal para este atleta (ex: Full Body, Upper/Lower, Torso/Limbs, Push/Pull/Legs, Híbrido, etc.). A divisão deve garantir frequência de estímulo de aproximadamente 2x/semana por agrupamento (respeitando a janela de 24-48h da MPS - Síntese Proteica Muscular) e tempo suficiente de recuperação central.
 2. SELEÇÃO CINESIOLÓGICA AUTÔNOMA: Defina livremente os melhores exercícios da biomecânica moderna, incluindo obrigatoriamente estímulos sob tensão em posição de alongamento muscular (Stretch-Mediated Hypertrophy - Maeo et al. 2021, Pedrosa et al. 2022) e alto Stimulus-to-Fatigue Ratio (SFR).
-3. ORDEM E PERIODIZAÇÃO DE PRIORIDADE: Conforme Simão et al. (2012), o grupo prioritário (${effectiveInputs.musclePriority}) DEVE ser posicionado no primeiro terço das sessões pertinentes.
+3. ORDEM E PERIODIZAÇÃO DE PRIORIDADE: Conforme Simão et al. (2012), o grupo prioritário (${effectiveInputs.musclePriority}) DEVE ser posicionado no primeiro terço das sessões pertinentes. Em dias Pull: costas/dorsais SEMPRE antes de bíceps.
 4. PARÂMETROS CIRÚRGICOS: Para cada exercício, determine séries (targetSets de 2 a 4), repetições (targetRepsMin-Max), RIR (1 a 2) e descanso exato em segundos (restSeconds ajustado para compostos vs isoladores e sexo).
 5. NOMENCLATURA PADRÃO EM PORTUGUÊS: Nomes de exercícios descritivos em português (ex: "Supino Inclinado com Halteres", "Cadeira Flexora Sentada", "Elevação Lateral na Polia").
 
@@ -1155,30 +1244,56 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
 }`;
 
   try {
-    const timeoutMs = options?.timeoutMs || 8000;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutMs = options?.timeoutMs || 45000;
+    let response: Response | null = null;
+    let lastError: any = null;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey.trim()}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
-          generationConfig: {
-            temperature: 0.3,
-            responseMimeType: 'application/json',
-          },
-        }),
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${trimmedKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
+              generationConfig: {
+                temperature: 0.25,
+                responseMimeType: 'application/json',
+              },
+            }),
+          }
+        );
+        clearTimeout(timer);
+
+        if (res.ok) {
+          response = res;
+          break;
+        } else if (res.status === 503 && attempt === 1) {
+          console.warn('[heavy.io] Gemini retornou 503 (ocupado), tentando novamente em 2s...');
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        } else {
+          throw new Error(`Gemini API error: ${res.status} ${res.statusText}`);
+        }
+      } catch (err: any) {
+        clearTimeout(timer);
+        lastError = err;
+        if (attempt === 1 && (err?.name === 'AbortError' || err?.message?.includes('network') || err?.message?.includes('fetch'))) {
+          console.warn('[heavy.io] Tentativa 1 com IA falhou, tentando novamente...');
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+        throw err;
       }
-    );
+    }
 
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    if (!response) {
+      throw lastError || new Error('Não foi possível obter resposta da API Gemini.');
     }
 
     const data = await response.json();
@@ -1240,9 +1355,16 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
           const sets = Math.max(1, Math.min(6, Number(item.targetSets) || 3));
           muscleSetTotals[matchedEx.targetMuscle] = (muscleSetTotals[matchedEx.targetMuscle] || 0) + sets;
 
+          // IMPORTANTE: Preservar o nome prescrito pela IA (item.name) como displayName.
+          // Usamos matchedEx.id para rastreamento de PRs e histórico no banco de dados,
+          // mas o nome exibido ao usuário deve ser EXATAMENTE o que a IA prescreveu.
+          // Isso evita que "Tríceps Francês na Polia" seja exibido como "Tríceps Coice" etc.
+          const aiPrescribedName = (item.name || item.exerciseName || '').trim();
+          const displayName = aiPrescribedName.length > 2 ? aiPrescribedName : matchedEx.name;
+
           validExercises.push({
             exerciseId: matchedEx.id,
-            exerciseName: matchedEx.name,
+            exerciseName: displayName,
             targetMuscle: matchedEx.targetMuscle,
             movementPattern: matchedEx.movementPattern,
             tier: item.tier || (matchedEx.mechanic === 'compound' ? 'primary_compound' : 'isolation'),
@@ -1254,6 +1376,7 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
             physiologicalRole: item.physiologicalRole || 'Estímulo Hipertrófico Calibrado',
           });
         }
+
       });
 
       sessions.push({
@@ -1311,8 +1434,13 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
       isAiGenerated: true,
       aiEngine: 'gemini-3.6-flash',
     };
-  } catch (err) {
-    console.warn('Falha ou timeout na IA Gemini, recorrendo com segurança ao motor cinemático local:', err);
+  } catch (err: any) {
+    const errorMessage = err?.message || String(err);
+    console.error(
+      '[heavy.io:recommendationEngine] Falha ou timeout na IA Gemini.\n' +
+      'Verifique conexão e se a chave EXPO_PUBLIC_GEMINI_API_KEY no .env possui cota ativa.\n' +
+      'Erro real:', errorMessage
+    );
     return generateGuidedRoutine(inputs);
   }
 }
@@ -1374,3 +1502,153 @@ export const getBiomechanicSubstitutes = (
 
   return candidates;
 };
+
+export interface AiBiomechanicSubstituteResult {
+  substitute: Exercise;
+  activationExplanation: string;
+}
+
+/**
+ * Consulta a IA Gemini para escolher, dentre os substitutos disponíveis,
+ * aquele que rigorosamente reproduz a mesma ativação neuromuscular, ângulo
+ * de trabalho das fibras e curva de tensão mecânica do exercício original.
+ */
+export async function getAiBiomechanicSubstitute(
+  currentExercise: { exerciseId?: string; exerciseName: string },
+  inputs?: Partial<GuidedInputs>,
+  options?: { apiKey?: string; timeoutMs?: number }
+): Promise<AiBiomechanicSubstituteResult | null> {
+  const effectiveInputs: GuidedInputs = {
+    frequency: inputs?.frequency || 4,
+    sessionDuration: inputs?.sessionDuration || '45-60',
+    goal: inputs?.goal || 'hypertrophy',
+    experienceLevel: inputs?.experienceLevel || 'intermediate',
+    equipment: inputs?.equipment || 'commercial',
+    restrictions: inputs?.restrictions || ['none'],
+    biologicalSex: inputs?.biologicalSex || 'male',
+    age: inputs?.age || 26,
+    weightKg: inputs?.weightKg || 78,
+    heightCm: inputs?.heightCm || 176,
+    musclePriority: inputs?.musclePriority || 'balanced',
+  };
+
+  const available = getAvailableExercises(effectiveInputs);
+  const currentId = currentExercise.exerciseId || '';
+  const current = available.find(e => e.id === currentId) ||
+    SEED_EXERCISES.find(e => e.id === currentId || e.name.toLowerCase() === currentExercise.exerciseName.toLowerCase());
+
+  const rawCandidates = getBiomechanicSubstitutes(currentId, effectiveInputs, 'all');
+  if (rawCandidates.length === 0) return null;
+
+  // Limita a até 15 candidatos para síntese ágil da IA
+  const candidates = rawCandidates.slice(0, 15);
+
+  const apiKey = (options?.apiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim();
+
+  // Se não houver chave disponível, usa o melhor candidato biomecânico local
+  if (apiKey.length < 10) {
+    const top = candidates[0];
+    return {
+      substitute: top,
+      activationExplanation: `Exercício biomecanicamente compatível com sobrecarga direta no grupo ${top.targetMuscle}.`,
+    };
+  }
+
+  const systemInstruction = `Você é o Diretor Técnico e Biomecânico do heavy.io.
+Sua especialidade é cinesiologia, eletromiografia (EMG), curvas de resistência e seleção cirúrgica de substitutos biomecânicos.
+Ao trocar um exercício, selecione o substituto que tenha a rigorosa mesma ativação neuromuscular, ângulo de trabalho das fibras e perfil de tensão mecânica.
+Responda ESTRITAMENTE em formato JSON válido, sem tags markdown e sem texto extra.`;
+
+  const candidatesListText = candidates.map(c => `- ${c.id}: ${c.name} (equipamento: ${c.equipment}, mecânica: ${c.mechanic}, músculo: ${c.targetMuscle})`).join('\n');
+
+  const prompt = `O atleta precisa trocar o seguinte exercício da sua planilha:
+- Exercício atual: "${current?.name || currentExercise.exerciseName}"
+- Músculo-alvo: ${current?.targetMuscle || 'mesmo grupo'}
+- Padrão de movimento: ${current?.movementPattern || 'equivalente'}
+- Equipamento disponível: ${effectiveInputs.equipment}
+- Restrições ortopédicas: ${effectiveInputs.restrictions.join(', ')}
+
+Exercícios candidatos disponíveis no sistema:
+${candidatesListText}
+
+Selecione o candidato que ofereça a ativação neuromuscular e vetor de sobrecarga mais idêntico.
+Retorne ESTRITAMENTE o seguinte JSON:
+{
+  "selectedExerciseId": string,
+  "selectedExerciseName": string,
+  "activationExplanation": string (1 frase técnica em português explicando a equivalência de ativação das fibras e perfil de tensão)
+}`;
+
+  try {
+    const timeoutMs = options?.timeoutMs || 15000;
+    let response: Response | null = null;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
+              generationConfig: {
+                temperature: 0.2,
+                responseMimeType: 'application/json',
+              },
+            }),
+          }
+        );
+        clearTimeout(timer);
+
+        if (res.ok) {
+          response = res;
+          break;
+        } else if ((res.status === 429 || res.status === 503) && attempt === 1) {
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        } else {
+          break;
+        }
+      } catch (e) {
+        clearTimeout(timer);
+        if (attempt === 1) {
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+      }
+    }
+
+    if (response && response.ok) {
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
+        const parsed = JSON.parse(rawText);
+        const match = candidates.find(c => c.id === parsed.selectedExerciseId) ||
+          available.find(a => a.id === parsed.selectedExerciseId) ||
+          candidates.find(c => c.name.toLowerCase() === parsed.selectedExerciseName?.toLowerCase()) ||
+          candidates[0];
+
+        if (match) {
+          return {
+            substitute: match,
+            activationExplanation: parsed.activationExplanation || `Mesma ativação neuromuscular no grupamento ${match.targetMuscle}.`,
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[heavy.io] Falha na IA de substituição, usando melhor candidato local:', err);
+  }
+
+  // Fallback seguro de precisão
+  const top = candidates[0];
+  return {
+    substitute: top,
+    activationExplanation: `Mesmo padrão de movimento e ativação mecânica prioritária para ${top.targetMuscle}.`,
+  };
+}

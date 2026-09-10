@@ -67,6 +67,7 @@ interface WorkoutStoreState {
   discardActiveSession: () => void;
   cancelWorkout: () => void;
   finishWorkout: () => WorkoutSession | null;
+  deleteWorkoutFromHistory: (sessionId: string) => void;
   
   // Ações de Exercício
   addExerciseToCurrentWorkout: (exercise: Exercise) => void;
@@ -310,6 +311,21 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         } catch (err) {
           console.error('Erro ao finalizar treino no SQLite:', err);
           return null;
+        }
+      },
+
+      deleteWorkoutFromHistory: (sessionId: string) => {
+        try {
+          deleteWorkoutSession(sessionId);
+          const history = getWorkoutHistory();
+          const prs = getPersonalRecords();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          set({
+            workoutHistory: history,
+            personalRecords: prs,
+          });
+        } catch (err) {
+          console.error('Erro ao deletar treino do histórico no SQLite:', err);
         }
       },
 

@@ -202,13 +202,16 @@ export default function OnboardingGuidedScreen() {
       setIsGeneratingPlan(true);
       setGenerationStage('Calibrando alavancas articulares e catálogo de exercícios...');
 
-      generateAiGuidedRoutine(inputs)
+      // Resolve a chave da API em tempo de bundling (Metro inlina EXPO_PUBLIC_* vars)
+      const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+
+      generateAiGuidedRoutine(inputs, { apiKey: geminiKey, timeoutMs: 45000 })
         .then((plan) => {
           setGeneratedPlan(plan);
           setActiveSessionIndex(0);
         })
         .catch((err) => {
-          console.warn('Recorrendo ao motor cinemático local:', err);
+          console.error('[heavy.io] Falha na IA Gemini, caindo para motor local:', err?.message || err);
           const fallback = generateGuidedRoutine(inputs);
           setGeneratedPlan(fallback);
           setActiveSessionIndex(0);
@@ -244,14 +247,17 @@ export default function OnboardingGuidedScreen() {
     setIsGeneratingPlan(true);
     setGenerationStage('Formulando nova combinação biomecânica com IA...');
 
-    generateAiGuidedRoutine(inputs)
+    const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+
+    generateAiGuidedRoutine(inputs, { apiKey: geminiKey, timeoutMs: 45000 })
       .then((plan) => {
         setGeneratedPlan(plan);
         setActiveSessionIndex(0);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       })
       .catch((err) => {
-        console.warn('Falha ao regerar com IA:', err);
+        console.error('[heavy.io] Falha ao regerar com IA:', err?.message || err);
+        Alert.alert('Erro ao regerar treino', 'Não foi possível obter resposta da IA Gemini. Tente novamente em instantes.');
       })
       .finally(() => {
         setIsGeneratingPlan(false);

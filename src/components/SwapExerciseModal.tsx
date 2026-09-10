@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -8,16 +8,19 @@ import {
   FlatList,
   TextInput,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { X, Search, RefreshCw, Dumbbell, ShieldCheck } from 'lucide-react-native';
+import { X, Search, RefreshCw, Dumbbell, ShieldCheck, Sparkles, Check } from 'lucide-react-native';
 import Theme from '../theme/theme';
 import { Exercise, Equipment } from '../types/workout';
 import {
   GuidedInputs,
   PlannedExercise,
   getBiomechanicSubstitutes,
+  getAiBiomechanicSubstitute,
+  AiBiomechanicSubstituteResult,
 } from '../services/recommendationEngine';
 import { useUserStore } from '../store/userStore';
 
@@ -43,8 +46,16 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [equipmentFilter, setEquipmentFilter] = useState<Equipment | 'all'>('all');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AiBiomechanicSubstituteResult | null>(null);
 
   const userProfile = useUserStore(s => s.profile);
+
+  // Reseta estado da IA quando o exercício alvo mudar
+  useEffect(() => {
+    setAiResult(null);
+    setIsAiLoading(false);
+  }, [currentExercise?.exerciseId]);
 
   // Busca os substitutos compatíveis cruzando biomecânica e disponibilidade de aparelhos
   const substitutes = useMemo(() => {
@@ -72,6 +83,28 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     onSelectSubstitute(substitute);
     onClose();
+  };
+
+  const handleRequestAiSubstitute = async () => {
+    if (!currentExercise) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setIsAiLoading(true);
+    try {
+      const effectiveInputs: Partial<GuidedInputs> = {
+        equipment: guidedInputs?.equipment || userProfile?.equipmentEnvironment || 'commercial',
+        restrictions: guidedInputs?.restrictions || userProfile?.physicalRestrictions || [],
+        ...guidedInputs,
+      };
+      const result = await getAiBiomechanicSubstitute(currentExercise, effectiveInputs);
+      if (result) {
+        setAiResult(result);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch (err) {
+      console.error('[heavy.io] Erro ao buscar substituto com IA:', err);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   if (!currentExercise) return null;
@@ -167,6 +200,115 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={styles.aiSectionContainer}>
+                {!aiResult ? (
+                  <TouchableOpacity
+                    style={styles.aiActionBanner}
+                    onPress={handleRequestAiSubstitute}
+                    disabled={isAiLoading}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.aiActionHeader}>
+                      <View style={styles.aiActionIconBox}>
+                        {isAiLoading ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Sparkles size={16} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <View style={styles.aiActionTextArea}>
+                        <View style={styles.aiActionBadgeRow}>
+                          <Text style={styles.aiActionBadge}>CINESIOLOGIA & ATIVAÇÃO</Text>
+                        </View>
+                        <Text style={styles.aiActionTitle}>
+                          {isAiLoading ? 'Analisando ativação neuromuscular...' : 'Trocar com IA'}
+                        </Text>
+                        <Text style={styles.aiActionSub}>
+                          {isAiLoading
+                            ? 'Calculando equivalência de fibras e curvas de tensão...'
+                            : 'A IA escolhe o substituto ideal com a mesma ativação muscular.'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.aiActionPill}>
+                      <Text style={styles.aiActionPillText}>
+                        {isAiLoading ? '...' : 'Sugerir'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.aiResultCard}>
+                    <View style={styles.aiResultTop}>
+                      <View style={styles.aiResultBadge}>
+                        <Sparkles size={11} color="#09090B" />
+                        <Text style={styles.aiResultBadgeText}>SUGESTÃO DA IA • MESMA ATIVAÇÃO</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleRequestAiSubstitute}
+                        disabled={isAiLoading}
+                        style={styles.aiRegenerateBtn}
+                        activeOpacity={0.7}
+                      >
+                        <RefreshCw size={11} color={Theme.colors.textMuted} />
+                        <Text style={styles.aiRegenerateText}>Outra opção</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.aiResultExName}>{aiResult.substitute.name}</Text>
+                    {aiResult.substitute.nameEn && (
+                      <Text style={styles.aiResultExNameEn}>{aiResult.substitute.nameEn}</Text>
+                    )}
+
+                    <View style={styles.tagsRow}>
+                      <View style={styles.tag}>
+                        <Text style={styles.tagText}>{aiResult.substitute.targetMuscle.toUpperCase()}</Text>
+                      </View>
+                      <View style={[styles.tag, styles.tagEquipment]}>
+                        <Text style={[styles.tagText, styles.tagEquipmentText]}>
+                          {aiResult.substitute.equipment === 'dumbbell'
+                            ? 'HALTERES'
+                            : aiResult.substitute.equipment === 'barbell'
+                            ? 'BARRA'
+                            : aiResult.substitute.equipment === 'machine'
+                            ? 'MÁQUINA'
+                            : aiResult.substitute.equipment === 'cable'
+                            ? 'CABO'
+                            : aiResult.substitute.equipment === 'smith'
+                            ? 'SMITH'
+                            : 'LIVRE'}
+                        </Text>
+                      </View>
+                      <View style={styles.tag}>
+                        <Text style={styles.tagText}>
+                          {aiResult.substitute.mechanic === 'compound' ? 'COMPOSTO' : 'ISOLADOR'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.aiExplanationBox}>
+                      <Text style={styles.aiExplanationLabel}>EQUIVALÊNCIA BIOMECÂNICA:</Text>
+                      <Text style={styles.aiExplanationText}>{aiResult.activationExplanation}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.aiApplyBtn}
+                      onPress={() => handleSelect(aiResult.substitute)}
+                      activeOpacity={0.85}
+                    >
+                      <Check size={14} color="#09090B" />
+                      <Text style={styles.aiApplyBtnText}>Aplicar Troca com IA</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <View style={styles.listDividerRow}>
+                  <View style={styles.listDividerLine} />
+                  <Text style={styles.listDividerText}>TODOS OS SUBSTITUTOS DO CATÁLOGO</Text>
+                  <View style={styles.listDividerLine} />
+                </View>
+              </View>
+            }
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>Nenhum substituto compatível encontrado</Text>
@@ -442,5 +584,180 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  aiSectionContainer: {
+    marginBottom: 10,
+  },
+  aiActionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    borderRadius: Theme.borderRadius.md,
+    padding: 12,
+    marginBottom: 4,
+  },
+  aiActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  aiActionIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiActionTextArea: {
+    flex: 1,
+  },
+  aiActionBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  aiActionBadge: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#A1A1AA',
+    letterSpacing: 0.6,
+  },
+  aiActionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  aiActionSub: {
+    fontSize: 11,
+    color: '#71717A',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  aiActionPill: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  aiActionPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#09090B',
+    letterSpacing: 0.3,
+  },
+  aiResultCard: {
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    borderRadius: Theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 4,
+  },
+  aiResultTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  aiResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  aiResultBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#09090B',
+    letterSpacing: 0.6,
+  },
+  aiRegenerateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  aiRegenerateText: {
+    fontSize: 11,
+    color: '#A1A1AA',
+    fontWeight: '600',
+  },
+  aiResultExName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  aiResultExNameEn: {
+    fontSize: 11,
+    color: '#71717A',
+    marginTop: 1,
+  },
+  aiExplanationBox: {
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  aiExplanationLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#A1A1AA',
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  aiExplanationText: {
+    fontSize: 12,
+    color: '#D4D4D8',
+    lineHeight: 16,
+  },
+  aiApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  aiApplyBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#09090B',
+    letterSpacing: 0.2,
+  },
+  listDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  listDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#27272A',
+  },
+  listDividerText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#71717A',
+    letterSpacing: 0.8,
   },
 });

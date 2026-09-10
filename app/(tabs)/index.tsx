@@ -9,11 +9,15 @@ import {
   Play,
   Plus,
   RotateCcw,
-  X
+  X,
+  AlertTriangle,
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -57,6 +61,9 @@ export default function WorkoutScreen() {
   const [summarySession, setSummarySession] = useState<WorkoutSession | null>(null);
   const [summaryPRs, setSummaryPRs] = useState<PersonalRecord[]>([]);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+
+  // Estado do Modal de Confirmação de Cancelamento do Treino Ativo
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   const loadRoutinesAndProgram = useCallback(() => {
     try {
@@ -112,17 +119,24 @@ export default function WorkoutScreen() {
   };
 
   const handleCancelWorkout = () => {
-    Alert.alert(
-      'Descartar Treino?',
-      'Todo o progresso deste treino ativo será perdido.',
-      [
-        { text: 'Continuar Treinando', style: 'cancel' },
-        { text: 'Descartar', style: 'destructive', onPress: cancelWorkout },
-      ]
-    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setIsCancelModalOpen(true);
+  };
+
+  const handleConfirmCancelWorkout = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    setIsCancelModalOpen(false);
+    cancelWorkout();
   };
 
   const handleDiscardRecoveryWorkout = () => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('Deseja realmente descartar este treino? Todos os dados não finalizados serão perdidos.')) {
+        discardActiveSession();
+      }
+      return;
+    }
+
     Alert.alert(
       'Descartar Treino em Andamento?',
       'Deseja realmente descartar este treino? Todos os dados não finalizados serão perdidos.',
@@ -533,6 +547,47 @@ export default function WorkoutScreen() {
           prs={summaryPRs}
           onClose={handleCloseSummary}
         />
+
+        {/* Modal de Confirmação para Descartar/Cancelar Treino Ativo */}
+        <Modal
+          visible={isCancelModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsCancelModalOpen(false)}
+        >
+          <View style={styles.confirmModalOverlay}>
+            <View style={styles.confirmModalCard}>
+              <View style={styles.confirmModalHeader}>
+                <View style={styles.confirmIconBadge}>
+                  <AlertTriangle size={18} color="#F59E0B" />
+                </View>
+                <Text style={styles.confirmModalTitle}>Cancelar Treino?</Text>
+              </View>
+
+              <Text style={styles.confirmModalText}>
+                Todo o progresso de séries, repetições, cargas e tempo desta sessão ativa será descartado. Deseja realmente cancelar e voltar?
+              </Text>
+
+              <View style={styles.confirmModalActions}>
+                <TouchableOpacity
+                  style={styles.confirmKeepBtn}
+                  onPress={() => setIsCancelModalOpen(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.confirmKeepBtnText}>Continuar Treino</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.confirmDiscardBtn}
+                  onPress={handleConfirmCancelWorkout}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.confirmDiscardBtnText}>Descartar e Sair</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -1048,5 +1103,82 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Theme.colors.textSecondary,
+  },
+
+  // Modal de Confirmação de Cancelamento
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmModalCard: {
+    backgroundColor: '#121215',
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    padding: 20,
+    width: '100%',
+    maxWidth: 380,
+  },
+  confirmModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  confirmIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#1C1917',
+    borderWidth: 1,
+    borderColor: '#44403C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  confirmModalText: {
+    fontSize: 13,
+    color: '#A1A1AA',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  confirmKeepBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    alignItems: 'center',
+  },
+  confirmKeepBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#A1A1AA',
+  },
+  confirmDiscardBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+  },
+  confirmDiscardBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

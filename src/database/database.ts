@@ -1527,7 +1527,7 @@ export const getActiveWorkoutSession = (): WorkoutSession | null => {
  */
 export const deleteWorkoutSession = (sessionId: string): void => {
   if ((Platform.OS as string) === 'web') {
-    return WebDB.deleteWorkoutSession(sessionId); return;;
+    return WebDB.deleteWorkoutSession(sessionId);
   }
   const db = getDatabase();
   db.withTransactionSync(() => {
@@ -1538,6 +1538,7 @@ export const deleteWorkoutSession = (sessionId: string): void => {
       [sessionId]
     );
     db.runSync('DELETE FROM workout_session_exercises WHERE session_id = ?;', [sessionId]);
+    db.runSync('DELETE FROM personal_records WHERE achieved_session_id = ?;', [sessionId]);
     db.runSync('DELETE FROM workout_sessions WHERE id = ?;', [sessionId]);
   });
   clearActiveSessionDraft();
