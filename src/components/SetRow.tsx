@@ -191,7 +191,7 @@ export const SetRow: React.FC<SetRowProps> = ({
 
       {/* Fantasma da Performance Anterior */}
       <View style={styles.previousBox}>
-        <Text style={previousPerformance ? styles.previousText : styles.previousEmpty}>
+        <Text style={previousPerformance ? styles.previousText : styles.previousEmpty} numberOfLines={1}>
           {previousPerformance || '—'}
         </Text>
       </View>
@@ -222,7 +222,6 @@ export const SetRow: React.FC<SetRowProps> = ({
           maxLength={6}
           returnKeyType="done"
         />
-        <Text style={styles.unitText}>kg</Text>
       </View>
 
       {/* Repetições */}
@@ -251,7 +250,6 @@ export const SetRow: React.FC<SetRowProps> = ({
           maxLength={4}
           returnKeyType="done"
         />
-        <Text style={styles.unitText}>reps</Text>
       </View>
 
       {/* Botão de Excluir Série */}
@@ -259,8 +257,9 @@ export const SetRow: React.FC<SetRowProps> = ({
         style={styles.deleteBtn} 
         onPress={onDelete}
         activeOpacity={0.6}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >
-        <Trash2 size={16} color={Theme.colors.textMuted} />
+        <Trash2 size={15} color={Theme.colors.textMuted} />
       </TouchableOpacity>
 
       {/* Checkbox de Conclusão */}
@@ -286,8 +285,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderRadius: Theme.borderRadius.md,
     backgroundColor: Theme.colors.surfaceCard,
     marginBottom: 6,
@@ -299,19 +298,19 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.borderLight,
   },
   badge: {
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     borderRadius: Theme.borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 6,
   },
   badgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   previousBox: {
-    width: 64,
+    width: 60,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
@@ -328,15 +327,18 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Theme.colors.surfaceElevated,
     borderRadius: Theme.borderRadius.sm,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     marginHorizontal: 3,
-    height: 38,
+    height: 36,
     borderWidth: 1,
     borderColor: Theme.colors.border,
+    overflow: 'hidden',
   },
   inputContainerFocused: {
     borderColor: '#FFFFFF',
@@ -348,8 +350,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 0,
+    width: '100%',
     color: Theme.colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
     padding: 0,
@@ -358,15 +362,12 @@ const styles = StyleSheet.create({
   inputCompleted: {
     color: Theme.colors.primary,
   },
-  unitText: {
-    color: Theme.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 2,
-  },
   deleteBtn: {
-    padding: 6,
-    marginRight: 4,
+    width: 28,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
   },
   checkBtn: {
     width: 36,
@@ -374,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: Theme.borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4,
+    marginLeft: 2,
   },
   checkBtnPending: {
     backgroundColor: Theme.colors.surfaceElevated,

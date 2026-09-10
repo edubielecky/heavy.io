@@ -185,9 +185,10 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
       <View style={styles.tableHeader}>
         <Text style={[styles.columnLabel, { width: 34 }]}>SÉRIE</Text>
         <Text style={[styles.columnLabel, { width: 64, textAlign: 'center' }]}>ANTERIOR</Text>
-        <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>PESO (KG)</Text>
+        <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>KG</Text>
         <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>REPS</Text>
-        <Text style={[styles.columnLabel, { width: 44, textAlign: 'center' }]}>STATUS</Text>
+        <View style={{ width: 28 }} />
+        <Text style={[styles.columnLabel, { width: 38, textAlign: 'center' }]}>STATUS</Text>
       </View>
 
       {/* Lista de Séries */}
