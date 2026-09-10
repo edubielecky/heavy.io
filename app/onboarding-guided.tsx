@@ -10,7 +10,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import { SwapExerciseModal } from '../src/components/SwapExerciseModal';
+import { WorkoutAuditModal } from '../src/components/WorkoutAuditModal';
 import { saveRoutine } from '../src/database/database';
 import {
   EquipmentEnvironment,
@@ -37,7 +38,7 @@ import {
 } from '../src/services/recommendationEngine';
 import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userStore';
 import Theme from '../src/theme/theme';
-import { Exercise } from '../src/types/workout';
+import { Exercise, WorkoutProgram } from '../src/types/workout';
 
 export default function OnboardingGuidedScreen() {
   const router = useRouter();
@@ -67,6 +68,9 @@ export default function OnboardingGuidedScreen() {
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [activeSessionIndex, setActiveSessionIndex] = useState<number>(0);
 
+  // Submodal de Auditoria Biomecânica com IA
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+
   // Modal de Troca de Exercício
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [exerciseToSwap, setExerciseToSwap] = useState<{
@@ -74,6 +78,37 @@ export default function OnboardingGuidedScreen() {
     exerciseIndex: number;
     exercise: PlannedExercise;
   } | null>(null);
+
+  // Converte o plano gerado para o formato WorkoutProgram para auditoria
+  const programForAudit = useMemo<WorkoutProgram | null>(() => {
+    if (!generatedPlan) return null;
+    return {
+      id: 'onboarding_generated_plan',
+      name: generatedPlan.planName,
+      description: generatedPlan.description,
+      isActive: true,
+      routines: generatedPlan.sessions.map((s, sIdx) => ({
+        id: s.id,
+        name: s.name,
+        description: s.focus,
+        isSystem: true,
+        orderIndex: sIdx,
+        createdAt: new Date().toISOString(),
+        exercises: s.exercises.map((e, eIdx) => ({
+          id: `item_${s.id}_${eIdx}`,
+          exerciseId: e.exerciseId,
+          exerciseName: e.exerciseName,
+          targetMuscle: e.targetMuscle,
+          orderIndex: eIdx,
+          targetSets: e.targetSets,
+          targetRepsMin: e.targetRepsMin,
+          targetRepsMax: e.targetRepsMax,
+          restSeconds: e.restSeconds,
+        })),
+      })),
+      createdAt: new Date().toISOString(),
+    };
+  }, [generatedPlan]);
 
   // Navegação entre passos
   const handleNextStep = () => {
@@ -758,6 +793,33 @@ export default function OnboardingGuidedScreen() {
               </View>
             )}
 
+            {/* Card de Auditoria Biomecânica e Vetores com IA */}
+            <View style={styles.aiAuditBannerCard}>
+              <View style={styles.aiAuditBannerTop}>
+                <View style={styles.aiAuditIconRow}>
+                  <Activity size={14} color={Theme.colors.primary} />
+                  <Text style={styles.aiAuditBannerTitle}>AUDITORIA BIOMECÂNICA IA</Text>
+                </View>
+                <View style={styles.aiAuditScoreBadge}>
+                  <Text style={styles.aiAuditScoreText}>VALIDADO CIENTIFICAMENTE</Text>
+                </View>
+              </View>
+              <Text style={styles.aiAuditBannerDesc}>
+                Distribuição validada quanto ao estresse lombo-pélvico, equilíbrio Push/Pull e marcos MAV de hipertrofia muscular.
+              </Text>
+              <TouchableOpacity
+                style={styles.aiAuditOpenBtn}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setIsAuditModalOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Sparkles size={13} color={Theme.colors.textInverse} />
+                <Text style={styles.aiAuditOpenBtnText}>Abrir Diagnóstico Biomecânico Completo</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Abas das Sessões */}
             <Text style={styles.sessionsHeading}>Sessões da Periodização:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sessionTabsRow}>
@@ -874,6 +936,13 @@ export default function OnboardingGuidedScreen() {
           musclePriority,
         }}
         onSelectSubstitute={handleApplySwap}
+      />
+
+      {/* Modal de Auditoria Biomecânica e Vetores */}
+      <WorkoutAuditModal
+        visible={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        program={programForAudit}
       />
     </SafeAreaView>
   );
@@ -1423,6 +1492,67 @@ const styles = StyleSheet.create({
     color: '#09090B',
     fontSize: 14,
     fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  aiAuditBannerCard: {
+    backgroundColor: '#121215',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    padding: 14,
+    marginBottom: 18,
+    gap: 8,
+  },
+  aiAuditBannerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiAuditIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  aiAuditBannerTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  aiAuditScoreBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  aiAuditScoreText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.5,
+  },
+  aiAuditBannerDesc: {
+    fontSize: 11,
+    color: '#A1A1AA',
+    lineHeight: 16,
+  },
+  aiAuditOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 4,
+  },
+  aiAuditOpenBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#09090B',
     letterSpacing: 0.3,
   },
 });

@@ -26,6 +26,7 @@ import {
   Sparkles,
   CheckCircle2,
   ChevronLeft,
+  Activity,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Theme from '../theme/theme';
@@ -45,8 +46,12 @@ import {
   addDayToProgram,
   deleteDayFromProgram,
   saveRoutine,
+  getExerciseById,
 } from '../database/database';
+import { SEED_EXERCISES } from '../database/seedData';
 import { AddExerciseModal } from './AddExerciseModal';
+import { WorkoutAuditModal } from './WorkoutAuditModal';
+import { AuditAction } from '../services/aiWorkoutService';
 
 interface RoutineManagementModalProps {
   visible: boolean;
@@ -79,6 +84,43 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
 
   // Modal para adicionar exercício ao dia selecionado
   const [isAddExerciseModalOpen, setIsAddExerciseModalOpen] = useState(false);
+
+  // Submodal de Diagnóstico Biomecânico (IA)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [auditTargetProgram, setAuditTargetProgram] = useState<WorkoutProgram | null>(null);
+
+  const handleApplyAuditAction = (action: AuditAction) => {
+    if (!auditTargetProgram) return;
+
+    if (action.type === 'swap' && action.fromExerciseId && action.toExerciseId) {
+      let modified = false;
+      auditTargetProgram.routines.forEach(routine => {
+        const exIndex = routine.exercises.findIndex(e => e.exerciseId === action.fromExerciseId);
+        if (exIndex >= 0) {
+          const toEx = getExerciseById(action.toExerciseId!) || SEED_EXERCISES.find(e => e.id === action.toExerciseId);
+          if (toEx) {
+            const updated = [...routine.exercises];
+            updated[exIndex] = {
+              ...updated[exIndex],
+              exerciseId: toEx.id,
+              exerciseName: toEx.name,
+              targetMuscle: toEx.targetMuscle,
+            };
+            saveRoutine({
+              ...routine,
+              exercises: updated,
+            });
+            modified = true;
+          }
+        }
+      });
+
+      if (modified) {
+        reloadPrograms();
+        Alert.alert('Otimização Aplicada', `Exercício substituído por ${action.toExerciseName || 'novo exercício'}.`);
+      }
+    }
+  };
 
   // Carrega programas do banco SQLite
   const reloadPrograms = () => {
@@ -519,6 +561,18 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
 
                       <View style={styles.cardRightBtns}>
                         <TouchableOpacity
+                          style={styles.auditProgramBtn}
+                          onPress={() => {
+                            setAuditTargetProgram(program);
+                            setIsAuditModalOpen(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Activity size={12} color={Theme.colors.primary} />
+                          <Text style={styles.auditProgramBtnText}>Auditar IA</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                           style={styles.editProgramBtn}
                           onPress={() => {
                             setEditingProgramId(program.id);
@@ -561,14 +615,28 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
                       {currentEditingProgram.routines.length} dias cadastrados • Selecione um dia para editar
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.addDayBtn}
-                    onPress={handleAddDay}
-                    activeOpacity={0.8}
-                  >
-                    <Plus size={13} color={Theme.colors.textInverse} />
-                    <Text style={styles.addDayBtnText}>Novo Dia</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={styles.auditHeaderBtn}
+                      onPress={() => {
+                        setAuditTargetProgram(currentEditingProgram);
+                        setIsAuditModalOpen(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Activity size={13} color={Theme.colors.primary} />
+                      <Text style={styles.auditHeaderBtnText}>Diagnóstico Biomecânico</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.addDayBtn}
+                      onPress={handleAddDay}
+                      activeOpacity={0.8}
+                    >
+                      <Plus size={13} color={Theme.colors.textInverse} />
+                      <Text style={styles.addDayBtnText}>Novo Dia</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* Seletor Horizontal de Dias */}
@@ -954,6 +1022,16 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
           onClose={() => setIsAddExerciseModalOpen(false)}
           onSelectExercise={handleExerciseSelected}
         />
+
+        {/* ======================================================== */}
+        {/* MODAL DE DIAGNÓSTICO BIOMECÂNICO COM IA                  */}
+        {/* ======================================================== */}
+        <WorkoutAuditModal
+          visible={isAuditModalOpen}
+          onClose={() => setIsAuditModalOpen(false)}
+          program={auditTargetProgram}
+          onApplyAction={handleApplyAuditAction}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -1174,6 +1252,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  auditProgramBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  auditProgramBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
   editProgramBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1214,6 +1308,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.textMuted,
     marginTop: 2,
+  },
+  auditHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  auditHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.text,
   },
   addDayBtn: {
     flexDirection: 'row',
