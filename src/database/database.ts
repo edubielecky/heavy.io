@@ -675,7 +675,6 @@ export const deleteProgram = (programId: string): boolean => {
   }
   const db = getDatabase();
   const all = getPrograms();
-  if (all.length <= 1) return false; // Impede exclusão se só resta 1 ficha
 
   const target = all.find(p => p.id === programId);
   if (!target) return false;

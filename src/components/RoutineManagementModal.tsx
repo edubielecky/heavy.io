@@ -75,6 +75,22 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
   // Dia atualmente selecionado dentro da ficha em edição
   const [selectedRoutineIndex, setSelectedRoutineIndex] = useState<number>(0);
 
+  // Modal de Confirmação de Exclusão (Ficha ou Dia de Treino)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    type: 'program' | 'day';
+    id: string;
+    name: string;
+  } | null>(null);
+
+  // Fichas ordenadas: A ficha em uso atualmente (ativa) SEMPRE aparece primeiro na lista e destacada, e as demais em sucessão
+  const sortedPrograms = useMemo(() => {
+    return [...programs].sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+    });
+  }, [programs]);
+
   // Submodais
   const [isNewProgramModalOpen, setIsNewProgramModalOpen] = useState(false);
   const [newProgramName, setNewProgramName] = useState('');
@@ -197,32 +213,34 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
     }
   };
 
-  // Excluir ficha
+  // Excluir ficha via modal de confirmação seguro
   const handleDeleteProgram = (program: WorkoutProgram) => {
-    if (programs.length <= 1) {
-      Alert.alert('Ação Não Permitida', 'Você deve manter pelo menos uma ficha cadastrada no aplicativo.');
-      return;
+    Haptics.selectionAsync().catch(() => {});
+    setDeleteConfirmation({
+      type: 'program',
+      id: program.id,
+      name: program.name,
+    });
+  };
+
+  // Confirmação final da exclusão (executada pelo modal de confirmação, compatível 100% com Web e Mobile)
+  const handleConfirmDelete = () => {
+    if (!deleteConfirmation) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+
+    if (deleteConfirmation.type === 'program') {
+      deleteProgram(deleteConfirmation.id);
+      if (editingProgramId === deleteConfirmation.id) {
+        setEditingProgramId(null);
+      }
+      reloadPrograms();
+    } else {
+      deleteDayFromProgram(deleteConfirmation.id);
+      setSelectedRoutineIndex(0);
+      reloadPrograms();
     }
 
-    Alert.alert(
-      'Excluir Ficha?',
-      `Deseja realmente excluir "${program.name}" e todos os seus dias de treino? Esta ação não pode ser desfeita.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-            deleteProgram(program.id);
-            if (editingProgramId === program.id) {
-              setEditingProgramId(null);
-            }
-            reloadPrograms();
-          },
-        },
-      ]
-    );
+    setDeleteConfirmation(null);
   };
 
   // Criar nova ficha
@@ -306,7 +324,7 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
     }
   };
 
-  // Excluir dia da ficha em edição
+  // Excluir dia da ficha em edição via modal de confirmação
   const handleDeleteDay = (routine: Routine) => {
     if (!currentEditingProgram) return;
     if (currentEditingProgram.routines.length <= 1) {
@@ -314,23 +332,12 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
       return;
     }
 
-    Alert.alert(
-      'Remover Dia de Treino?',
-      `Deseja remover "${routine.name}" e os exercícios programados para este dia?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover',
-          style: 'destructive',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-            deleteDayFromProgram(routine.id);
-            setSelectedRoutineIndex(0);
-            reloadPrograms();
-          },
-        },
-      ]
-    );
+    Haptics.selectionAsync().catch(() => {});
+    setDeleteConfirmation({
+      type: 'day',
+      id: routine.id,
+      name: routine.name,
+    });
   };
 
   // Atualizar nome do dia
@@ -541,121 +548,131 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
             </View>
 
             {/* Listagem das Fichas */}
-            <View style={styles.programsList}>
-              {programs.map((program) => {
-                const totalExercises = program.routines.reduce(
-                  (acc, r) => acc + (r.exercises?.length || 0),
-                  0
-                );
+            {programs.length === 0 ? (
+              <View style={styles.emptyProgramsBox}>
+                <Layers size={36} color={Theme.colors.textMuted} />
+                <Text style={styles.emptyProgramsTitle}>Nenhuma ficha cadastrada</Text>
+                <Text style={styles.emptyProgramsSub}>
+                  Todas as fichas foram excluídas. Crie uma nova ficha manualmente ou gere com IA acima.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.programsList}>
+                {sortedPrograms.map((program) => {
+                  const totalExercises = program.routines.reduce(
+                    (acc, r) => acc + (r.exercises?.length || 0),
+                    0
+                  );
 
-                return (
-                  <View
-                    key={program.id}
-                    style={[styles.programCard, program.isActive && styles.programCardActive]}
-                  >
-                    {/* Header do Card */}
-                    <View style={styles.programCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={styles.programTitleRow}>
-                          <Text style={styles.programName}>{program.name}</Text>
-                          {program.isActive && (
-                            <View style={styles.activeBadge}>
-                              <Check size={10} color={Theme.colors.textInverse} />
-                              <Text style={styles.activeBadgeText}>ATIVA</Text>
-                            </View>
-                          )}
+                  return (
+                    <View
+                      key={program.id}
+                      style={[styles.programCard, program.isActive && styles.programCardActive]}
+                    >
+                      {/* Header do Card */}
+                      <View style={styles.programCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.programTitleRow}>
+                            <Text style={[styles.programName, program.isActive && styles.programNameActive]}>
+                              {program.name}
+                            </Text>
+                            {program.isActive && (
+                              <View style={styles.activeBadge}>
+                                <Check size={10} color={Theme.colors.textInverse} strokeWidth={3} />
+                                <Text style={styles.activeBadgeText}>EM USO NO CICLO</Text>
+                              </View>
+                            )}
+                          </View>
+                          {program.description ? (
+                            <Text style={styles.programDesc}>{program.description}</Text>
+                          ) : null}
                         </View>
-                        {program.description ? (
-                          <Text style={styles.programDesc}>{program.description}</Text>
-                        ) : null}
+
+                        {/* Botão de Renomear */}
+                        <TouchableOpacity
+                          style={styles.iconBtn}
+                          onPress={() => {
+                            setRenameTargetId(program.id);
+                            setRenameValue(program.name);
+                            setIsRenameProgramModalOpen(true);
+                          }}
+                        >
+                          <Edit2 size={15} color={Theme.colors.textMuted} />
+                        </TouchableOpacity>
                       </View>
 
-                      {/* Botão de Renomear */}
-                      <TouchableOpacity
-                        style={styles.iconBtn}
-                        onPress={() => {
-                          setRenameTargetId(program.id);
-                          setRenameValue(program.name);
-                          setIsRenameProgramModalOpen(true);
-                        }}
-                      >
-                        <Edit2 size={15} color={Theme.colors.textMuted} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Métricas da Ficha */}
-                    <View style={styles.metricsRow}>
-                      <View style={styles.metricItem}>
-                        <Calendar size={12} color={Theme.colors.textMuted} />
-                        <Text style={styles.metricText}>
-                          {program.routines.length} {program.routines.length === 1 ? 'dia' : 'dias'} de treino
-                        </Text>
-                      </View>
-                      <View style={styles.metricDivider} />
-                      <View style={styles.metricItem}>
-                        <Dumbbell size={12} color={Theme.colors.textMuted} />
-                        <Text style={styles.metricText}>
-                          {totalExercises} exercícios no total
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Preview dos Dias da Ficha */}
-                    <View style={styles.daysPreview}>
-                      {program.routines.map((r, rIdx) => (
-                        <View key={r.id || rIdx} style={styles.dayChip}>
-                          <Text style={styles.dayChipTag}>{String.fromCharCode(65 + rIdx)}</Text>
-                          <Text style={styles.dayChipName} numberOfLines={1}>
-                            {r.name}
+                      {/* Métricas da Ficha */}
+                      <View style={styles.metricsRow}>
+                        <View style={styles.metricItem}>
+                          <Calendar size={12} color={Theme.colors.textMuted} />
+                          <Text style={styles.metricText}>
+                            {program.routines.length} {program.routines.length === 1 ? 'dia' : 'dias'} de treino
                           </Text>
                         </View>
-                      ))}
-                    </View>
-
-                    {/* Barra de Ações */}
-                    <View style={styles.cardActionsRow}>
-                      {program.isActive ? (
-                        <View style={styles.activeStatusIndicator}>
-                          <CheckCircle2 size={13} color={Theme.colors.success} />
-                          <Text style={styles.activeStatusText}>Ficha Ativa no Ciclo</Text>
+                        <View style={styles.metricDivider} />
+                        <View style={styles.metricItem}>
+                          <Dumbbell size={12} color={Theme.colors.textMuted} />
+                          <Text style={styles.metricText}>
+                            {totalExercises} exercícios no total
+                          </Text>
                         </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.makeActiveBtn}
-                          onPress={() => handleToggleActive(program.id)}
-                          activeOpacity={0.8}
-                        >
-                          <Check size={13} color={Theme.colors.text} />
-                          <Text style={styles.makeActiveBtnText}>Tornar Ativa</Text>
-                        </TouchableOpacity>
-                      )}
+                      </View>
 
-                      <View style={styles.cardRightBtns}>
-                        <TouchableOpacity
-                          style={styles.auditProgramBtn}
-                          onPress={() => {
-                            setAuditTargetProgram(program);
-                            setIsAuditModalOpen(true);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Activity size={12} color={Theme.colors.primary} />
-                          <Text style={styles.auditProgramBtnText}>Auditar IA</Text>
-                        </TouchableOpacity>
+                      {/* Preview dos Dias da Ficha */}
+                      <View style={styles.daysPreview}>
+                        {program.routines.map((r, rIdx) => (
+                          <View key={r.id || rIdx} style={styles.dayChip}>
+                            <Text style={styles.dayChipTag}>{String.fromCharCode(65 + rIdx)}</Text>
+                            <Text style={styles.dayChipName} numberOfLines={1}>
+                              {r.name}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
 
-                        <TouchableOpacity
-                          style={styles.editProgramBtn}
-                          onPress={() => {
-                            setEditingProgramId(program.id);
-                            setSelectedRoutineIndex(0);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.editProgramBtnText}>Editar Dias</Text>
-                          <ChevronRight size={14} color={Theme.colors.text} />
-                        </TouchableOpacity>
+                      {/* Barra de Ações */}
+                      <View style={styles.cardActionsRow}>
+                        {program.isActive ? (
+                          <View style={styles.activeStatusIndicator}>
+                            <CheckCircle2 size={13} color={Theme.colors.success} />
+                            <Text style={styles.activeStatusText}>Ficha em Uso Atual</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.makeActiveBtn}
+                            onPress={() => handleToggleActive(program.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Check size={13} color={Theme.colors.text} />
+                            <Text style={styles.makeActiveBtnText}>Tornar Ativa</Text>
+                          </TouchableOpacity>
+                        )}
 
-                        {programs.length > 1 && (
+                        <View style={styles.cardRightBtns}>
+                          <TouchableOpacity
+                            style={styles.auditProgramBtn}
+                            onPress={() => {
+                              setAuditTargetProgram(program);
+                              setIsAuditModalOpen(true);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Activity size={12} color={Theme.colors.primary} />
+                            <Text style={styles.auditProgramBtnText}>Auditar IA</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.editProgramBtn}
+                            onPress={() => {
+                              setEditingProgramId(program.id);
+                              setSelectedRoutineIndex(0);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.editProgramBtnText}>Editar Dias</Text>
+                            <ChevronRight size={14} color={Theme.colors.text} />
+                          </TouchableOpacity>
+
                           <TouchableOpacity
                             style={styles.deleteProgramBtn}
                             onPress={() => handleDeleteProgram(program)}
@@ -663,13 +680,13 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
                           >
                             <Trash2 size={14} color={Theme.colors.danger} />
                           </TouchableOpacity>
-                        )}
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            )}
           </ScrollView>
         ) : (
           /* ====================================================== */
@@ -1108,6 +1125,51 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
                   onPress={handleSaveRename}
                 >
                   <Text style={styles.dialogConfirmBtnText}>Salvar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ======================================================== */}
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (WEB & MOBILE)          */}
+        {/* ======================================================== */}
+        <Modal
+          visible={Boolean(deleteConfirmation)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDeleteConfirmation(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.dialogBox}>
+              <View style={styles.dialogHeader}>
+                <Text style={[styles.dialogTitle, { color: Theme.colors.danger }]}>
+                  {deleteConfirmation?.type === 'program' ? 'Excluir Ficha?' : 'Remover Dia de Treino?'}
+                </Text>
+                <TouchableOpacity onPress={() => setDeleteConfirmation(null)}>
+                  <X size={18} color={Theme.colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.deleteDialogDesc}>
+                {deleteConfirmation?.type === 'program'
+                  ? `Deseja realmente excluir "${deleteConfirmation?.name}" e todos os seus dias de treino? Esta ação não pode ser desfeita.`
+                  : `Deseja remover "${deleteConfirmation?.name}" e os exercícios programados para este dia?`}
+              </Text>
+
+              <View style={styles.dialogActions}>
+                <TouchableOpacity
+                  style={styles.dialogCancelBtn}
+                  onPress={() => setDeleteConfirmation(null)}
+                >
+                  <Text style={styles.dialogCancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.dialogDangerBtn}
+                  onPress={handleConfirmDelete}
+                >
+                  <Text style={styles.dialogDangerBtnText}>Excluir</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1933,5 +1995,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Theme.colors.textInverse,
+  },
+  emptyProgramsBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: Theme.colors.surfaceCard,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    gap: 8,
+    marginTop: 8,
+  },
+  emptyProgramsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Theme.colors.text,
+  },
+  emptyProgramsSub: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  programNameActive: {
+    color: '#FFFFFF',
+  },
+  deleteDialogDesc: {
+    fontSize: 13,
+    color: Theme.colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  dialogDangerBtn: {
+    backgroundColor: Theme.colors.danger,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  dialogDangerBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

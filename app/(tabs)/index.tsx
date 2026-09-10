@@ -192,10 +192,18 @@ export default function WorkoutScreen() {
     return pool[0];
   }, [routines, workoutHistory]);
 
-  // Outras rotinas disponíveis na grade
+  // Outras rotinas disponíveis na grade (ordenadas ciclicamente em sucessão após o treino de hoje)
   const otherRoutines = useMemo(() => {
-    if (!routineOfTheDay) return routines;
-    return routines.filter(r => r.id !== routineOfTheDay.id);
+    if (!routineOfTheDay || routines.length <= 1) return [];
+    const currentIndex = routines.findIndex(r => r.id === routineOfTheDay.id);
+    if (currentIndex === -1) return routines.filter(r => r.id !== routineOfTheDay.id);
+    
+    const ordered: Routine[] = [];
+    for (let i = 1; i < routines.length; i++) {
+      const nextIdx = (currentIndex + i) % routines.length;
+      ordered.push(routines[nextIdx]);
+    }
+    return ordered;
   }, [routines, routineOfTheDay]);
 
   // =========================================================
@@ -374,7 +382,7 @@ export default function WorkoutScreen() {
                 </View>
               </View>
 
-              {otherRoutines.map(routine => (
+              {otherRoutines.map((routine, idx) => (
                 <TouchableOpacity
                   key={routine.id}
                   style={styles.routineCard}
@@ -384,9 +392,9 @@ export default function WorkoutScreen() {
                   <View style={styles.routineCardLeft}>
                     <View style={styles.routineCardHeader}>
                       <Text style={styles.routineCardName}>{routine.name}</Text>
-                      <View style={styles.routineBadge}>
-                        <Text style={styles.routineBadgeText}>
-                          {routine.exercises.length} EX
+                      <View style={[styles.routineBadge, idx === 0 && { borderColor: Theme.colors.borderLight }]}>
+                        <Text style={[styles.routineBadgeText, idx === 0 && { color: Theme.colors.text }]}>
+                          {idx === 0 ? 'PRÓXIMO NO CICLO' : `${routine.exercises.length} EX`}
                         </Text>
                       </View>
                     </View>
