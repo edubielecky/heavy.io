@@ -40,31 +40,91 @@ import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userSt
 import Theme from '../src/theme/theme';
 import { Exercise, WorkoutProgram } from '../src/types/workout';
 
+type StepKey =
+  | 'biometrics'
+  | 'priority'
+  | 'frequency'
+  | 'duration'
+  | 'goal'
+  | 'experience'
+  | 'equipment'
+  | 'restrictions'
+  | 'result';
+
 export default function OnboardingGuidedScreen() {
   const router = useRouter();
-  const { completeOnboarding } = useUserStore();
+  const { hasCompletedOnboarding, profile, completeOnboarding } = useUserStore();
 
-  // Wizard de 9 etapas científicas (Passos 1 a 9)
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  // Se o usuário já possui perfil salvo no banco/store, pula perguntas básicas e foca em mudança de treino
+  const isExistingProfile = Boolean(
+    hasCompletedOnboarding || (profile?.bodyWeightKg && profile?.heightCm)
+  );
 
-  // Passo 1: Biometria & Fisiologia
-  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex>('male');
-  const [age, setAge] = useState<string>('26');
-  const [weight, setWeight] = useState<string>('78');
-  const [height, setHeight] = useState<string>('176');
+  const stepsOrder = useMemo<StepKey[]>(() => {
+    if (isExistingProfile) {
+      return [
+        'priority',
+        'frequency',
+        'duration',
+        'goal',
+        'equipment',
+        'restrictions',
+        'result',
+      ];
+    }
+    return [
+      'biometrics',
+      'priority',
+      'frequency',
+      'duration',
+      'goal',
+      'experience',
+      'equipment',
+      'restrictions',
+      'result',
+    ];
+  }, [isExistingProfile]);
+
+  const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const currentStepKey = stepsOrder[currentStepIndex] || 'priority';
+
+  // Passo 1: Biometria & Fisiologia (carrega dados salvos do usuário)
+  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex>(profile?.biologicalSex || 'male');
+  const [age, setAge] = useState<string>(profile?.age ? String(profile.age) : '26');
+  const [weight, setWeight] = useState<string>(profile?.bodyWeightKg ? String(profile.bodyWeightKg) : '78');
+  const [height, setHeight] = useState<string>(profile?.heightCm ? String(profile.heightCm) : '176');
 
   // Passo 2: Foco Muscular Prioritário
-  const [musclePriority, setMusclePriority] = useState<MusclePriority>('balanced');
+  const [musclePriority, setMusclePriority] = useState<MusclePriority>(profile?.musclePriority || 'balanced');
 
-  // Passos 3 a 8: Variáveis Operacionais de Treino
-  const [frequency, setFrequency] = useState<WeeklyFrequency>(4);
+  // Passos de Treino (Mudança de Rotina)
+  const [frequency, setFrequency] = useState<WeeklyFrequency>(
+    (profile?.preferredDaysPerWeek as WeeklyFrequency) || 4
+  );
   const [duration, setDuration] = useState<SessionDuration>('45-60');
-  const [goal, setGoal] = useState<PrimaryGoal>('hypertrophy');
-  const [experience, setExperience] = useState<ExperienceLevel>('intermediate');
-  const [equipment, setEquipment] = useState<EquipmentEnvironment>('commercial');
-  const [restrictions, setRestrictions] = useState<PhysicalRestriction[]>(['none']);
 
-  // Passo 9: Plano Fisiológico Gerado
+  const initialGoal: PrimaryGoal = profile?.primaryGoal === 'forca_pura'
+    ? 'strength'
+    : profile?.primaryGoal === 'recomposicao'
+      ? 'conditioning'
+      : 'hypertrophy';
+  const [goal, setGoal] = useState<PrimaryGoal>(initialGoal);
+
+  const initialExp: ExperienceLevel = profile?.experienceLevel === 'iniciante'
+    ? 'beginner'
+    : profile?.experienceLevel === 'avancado'
+      ? 'advanced'
+      : 'intermediate';
+  const [experience, setExperience] = useState<ExperienceLevel>(initialExp);
+
+  const [equipment, setEquipment] = useState<EquipmentEnvironment>(profile?.equipmentEnvironment || 'commercial');
+  const [restrictions, setRestrictions] = useState<PhysicalRestriction[]>(
+    profile?.physicalRestrictions && profile.physicalRestrictions.length > 0
+      ? (profile.physicalRestrictions as PhysicalRestriction[])
+      : ['none']
+  );
+
+  // Passo Final: Plano Fisiológico Gerado
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [activeSessionIndex, setActiveSessionIndex] = useState<number>(0);
 
@@ -113,11 +173,12 @@ export default function OnboardingGuidedScreen() {
   // Navegação entre passos
   const handleNextStep = () => {
     Haptics.selectionAsync().catch(() => {});
-    if (currentStep === 8) {
-      // Ao sair do Passo 8 para o 9, executa o motor fisiológico algorítmico
-      const parsedAge = parseInt(age, 10) || 26;
-      const parsedWeight = parseFloat(weight.replace(',', '.')) || 75;
-      const parsedHeight = parseFloat(height.replace(',', '.')) || 175;
+    const nextIndex = currentStepIndex + 1;
+    // Ao avançar para a última etapa (result), executa a síntese fisiológica
+    if (nextIndex === stepsOrder.length - 1) {
+      const parsedAge = parseInt(age, 10) || profile?.age || 26;
+      const parsedWeight = parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78;
+      const parsedHeight = parseFloat(height.replace(',', '.')) || profile?.heightCm || 176;
 
       const inputs: GuidedInputs = {
         frequency,
@@ -136,16 +197,16 @@ export default function OnboardingGuidedScreen() {
       const plan = generateGuidedRoutine(inputs);
       setGeneratedPlan(plan);
       setActiveSessionIndex(0);
-      setCurrentStep(9);
-    } else {
-      setCurrentStep(prev => prev + 1);
+      setCurrentStepIndex(nextIndex);
+    } else if (nextIndex < stepsOrder.length) {
+      setCurrentStepIndex(nextIndex);
     }
   };
 
   const handlePrevStep = () => {
     Haptics.selectionAsync().catch(() => {});
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(prev => prev - 1);
     } else {
       router.back();
     }
@@ -209,9 +270,9 @@ export default function OnboardingGuidedScreen() {
     if (!generatedPlan) return;
 
     try {
-      const parsedAge = parseInt(age, 10) || 26;
-      const parsedWeight = parseFloat(weight.replace(',', '.')) || 75;
-      const parsedHeight = parseFloat(height.replace(',', '.')) || 175;
+      const parsedAge = parseInt(age, 10) || profile?.age || 26;
+      const parsedWeight = parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78;
+      const parsedHeight = parseFloat(height.replace(',', '.')) || profile?.heightCm || 176;
 
       // 1. Cria a ficha completa vinculada ao WorkoutProgram e a marca como ativa
       const createdProg = createProgram(
@@ -239,6 +300,12 @@ export default function OnboardingGuidedScreen() {
         returning: 'iniciante',
       };
 
+      const goalMap: Record<PrimaryGoal, 'forca_pura' | 'hipertrofia' | 'recomposicao'> = {
+        strength: 'forca_pura',
+        hypertrophy: 'hipertrofia',
+        conditioning: 'recomposicao',
+      };
+
       completeOnboarding({
         onboardingTrack: 'guided',
         experienceLevel: expMap[experience],
@@ -247,30 +314,45 @@ export default function OnboardingGuidedScreen() {
         musclePriority,
         heightCm: parsedHeight,
         bodyWeightKg: parsedWeight,
+        primaryGoal: goalMap[goal],
+        preferredDaysPerWeek: frequency,
+        equipmentEnvironment: equipment,
+        physicalRestrictions: restrictions as any,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(
-        'Ficha Criada e Ativada!',
-        `A ficha "${createdProg.name}" foi calculada com sucesso pela IA e definida como a periodização ativa do seu ciclo.`,
-        [{ text: 'Acessar Treinos', onPress: () => router.replace('/(tabs)' as any) }]
-      );
+
+      // 3. Redirecionamento DIRETO para a tela principal (tabs) sem bloqueio de alert
+      router.replace('/(tabs)' as any);
     } catch (err) {
       console.error('Erro ao persistir ficha guiada:', err);
       Alert.alert('Erro', 'Houve uma falha ao salvar a ficha no banco local.');
     }
   };
 
-  const stepLabels: Record<number, string> = {
-    1: 'Passo 1: Biometria & Alavancas',
-    2: 'Passo 2: Foco Muscular Prioritário',
-    3: 'Passo 3: Frequência Semanal',
-    4: 'Passo 4: Tempo por Sessão',
-    5: 'Passo 5: Objetivo Fisiológico',
-    6: 'Passo 6: Nível de Treino & Histórico',
-    7: 'Passo 7: Local & Equipamento',
-    8: 'Passo 8: Restrições & Desconfortos',
-    9: 'Passo 9: Prescrição Científica do Treino',
+  const getStepTitle = (key: StepKey, stepNum: number) => {
+    switch (key) {
+      case 'biometrics':
+        return `Passo ${stepNum}: Biometria & Alavancas`;
+      case 'priority':
+        return `Passo ${stepNum}: Foco Muscular Prioritário`;
+      case 'frequency':
+        return `Passo ${stepNum}: Frequência Semanal`;
+      case 'duration':
+        return `Passo ${stepNum}: Tempo por Sessão`;
+      case 'goal':
+        return `Passo ${stepNum}: Objetivo do Treino`;
+      case 'experience':
+        return `Passo ${stepNum}: Nível de Treino & Histórico`;
+      case 'equipment':
+        return `Passo ${stepNum}: Local & Equipamento`;
+      case 'restrictions':
+        return `Passo ${stepNum}: Restrições & Desconfortos`;
+      case 'result':
+        return `Passo ${stepNum}: Prescrição Científica do Treino`;
+      default:
+        return `Passo ${stepNum}`;
+    }
   };
 
   return (
@@ -282,28 +364,43 @@ export default function OnboardingGuidedScreen() {
         </TouchableOpacity>
 
         <View style={styles.progressPills}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(step => (
+          {stepsOrder.map((stepKey, idx) => (
             <View
-              key={step}
+              key={stepKey}
               style={[
                 styles.pill,
-                step <= currentStep && styles.pillActive,
-                step === currentStep && styles.pillCurrent,
+                idx <= currentStepIndex && styles.pillActive,
+                idx === currentStepIndex && styles.pillCurrent,
               ]}
             />
           ))}
         </View>
 
-        <Text style={styles.stepNumber}>{currentStep}/9</Text>
+        <Text style={styles.stepNumber}>
+          {currentStepIndex + 1}/{stepsOrder.length}
+        </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>{stepLabels[currentStep]}</Text>
+        {isExistingProfile && currentStepKey !== 'result' && (
+          <View style={styles.profileBadgeBanner}>
+            <View style={styles.profileBadgeLeft}>
+              <Activity size={13} color="#A1A1AA" />
+              <Text style={styles.profileBadgeText}>
+                Perfil Salvo: {biologicalSex === 'male' ? 'Masc' : 'Fem'} • {age} anos • {weight}kg • {height}cm • {experience === 'beginner' ? 'Iniciante' : experience === 'advanced' ? 'Avançado' : 'Intermediário'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <Text style={styles.stepTitle}>
+          {getStepTitle(currentStepKey, currentStepIndex + 1)}
+        </Text>
 
         {/* ========================================================= */}
         {/* PASSO 1: BIOMETRIA & FISIOLOGIA                           */}
         {/* ========================================================= */}
-        {currentStep === 1 && (
+        {currentStepKey === 'biometrics' && (
           <View>
             <Text style={styles.stepDescription}>
               Seus parâmetros antropométricos calibram alavancas de movimento, estresse axial na coluna e recuperação metabólica entre séries (Hunter, 2014).
@@ -422,7 +519,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 2: FOCO MUSCULAR PRIORITÁRIO                        */}
         {/* ========================================================= */}
-        {currentStep === 2 && (
+        {currentStepKey === 'priority' && (
           <View>
             <Text style={styles.stepDescription}>
               Conforme Simão et al. (2012), os primeiros exercícios da sessão recebem o maior estímulo hipertrófico. Qual grupo muscular é sua prioridade máxima?
@@ -467,7 +564,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 3: FREQUÊNCIA SEMANAL                               */}
         {/* ========================================================= */}
-        {currentStep === 3 && (
+        {currentStepKey === 'frequency' && (
           <View>
             <Text style={styles.stepDescription}>
               Quantos dias por semana você tem disponibilidade real para treinar com consistência?
@@ -511,7 +608,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 4: TEMPO POR SESSÃO                                 */}
         {/* ========================================================= */}
-        {currentStep === 4 && (
+        {currentStepKey === 'duration' && (
           <View>
             <Text style={styles.stepDescription}>
               Quanto tempo você planeja dedicar a cada sessão de treino?
@@ -553,7 +650,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 5: OBJETIVO FISIOLÓGICO                             */}
         {/* ========================================================= */}
-        {currentStep === 5 && (
+        {currentStepKey === 'goal' && (
           <View>
             <Text style={styles.stepDescription}>
               Qual o foco central que guiará as faixas de repetição e o estresse mecânico ou metabólico?
@@ -595,7 +692,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 6: NÍVEL DE TREINO & HISTÓRICO                      */}
         {/* ========================================================= */}
-        {currentStep === 6 && (
+        {currentStepKey === 'experience' && (
           <View>
             <Text style={styles.stepDescription}>
               O algoritmo calibra o volume semanal de séries de acordo com seus marcos de volume (Israetel, RP).
@@ -637,7 +734,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 7: LOCAL & EQUIPAMENTO                              */}
         {/* ========================================================= */}
-        {currentStep === 7 && (
+        {currentStepKey === 'equipment' && (
           <View>
             <Text style={styles.stepDescription}>
               Quais equipamentos estarão realmente disponíveis para as sessões de treino?
@@ -679,7 +776,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 8: RESTRIÇÕES & DESCONFORTOS                        */}
         {/* ========================================================= */}
-        {currentStep === 8 && (
+        {currentStepKey === 'restrictions' && (
           <View>
             <Text style={styles.stepDescription}>
               Selecione desconfortos articulares prévios. O algoritmo substituirá automaticamente exercícios axiais ou de alto risco por opções biomecanicamente favoráveis.
@@ -722,7 +819,7 @@ export default function OnboardingGuidedScreen() {
         {/* ========================================================= */}
         {/* PASSO 9: PRESCRIÇÃO CIENTÍFICA DO TREINO                  */}
         {/* ========================================================= */}
-        {currentStep === 9 && generatedPlan && (
+        {currentStepKey === 'result' && generatedPlan && (
           <View>
             {/* Header do Plano Gerado */}
             <View style={styles.planHeaderCard}>
@@ -899,15 +996,17 @@ export default function OnboardingGuidedScreen() {
           </View>
         )}
 
-        {/* Botão de Avanço nos Passos 1 a 8 */}
-        {currentStep < 9 && (
+        {/* Botão de Avanço nos Passos Anteriores ao Resultado */}
+        {currentStepIndex < stepsOrder.length - 1 && (
           <TouchableOpacity
             style={styles.nextButton}
             onPress={handleNextStep}
             activeOpacity={0.85}
           >
             <Text style={styles.nextButtonText}>
-              {currentStep === 8 ? 'Calcular Periodização Fisiológica' : 'Próximo Passo'}
+              {currentStepIndex === stepsOrder.length - 2
+                ? 'Calcular Nova Periodização Fisiológica'
+                : 'Próximo Passo'}
             </Text>
             <ArrowRight size={18} color={Theme.colors.textInverse} />
           </TouchableOpacity>
@@ -927,9 +1026,9 @@ export default function OnboardingGuidedScreen() {
           equipment,
           restrictions,
           biologicalSex,
-          age: parseInt(age, 10) || 26,
-          weightKg: parseFloat(weight.replace(',', '.')) || 75,
-          heightCm: parseFloat(height.replace(',', '.')) || 175,
+          age: parseInt(age, 10) || profile?.age || 26,
+          weightKg: parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78,
+          heightCm: parseFloat(height.replace(',', '.')) || profile?.heightCm || 176,
           musclePriority,
         }}
         onSelectSubstitute={handleApplySwap}
@@ -996,6 +1095,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 60,
+  },
+  profileBadgeBanner: {
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 16,
+  },
+  profileBadgeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#A1A1AA',
   },
   stepTitle: {
     fontSize: 22,
