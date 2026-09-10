@@ -1,49 +1,38 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Clock,
-  Calendar,
-  Sparkles,
-  Shield,
-  Layers,
-  Dumbbell,
-  RefreshCw,
-  Zap,
-  Target,
-  Activity,
-  Award,
+  RefreshCw
 } from 'lucide-react-native';
-import Theme from '../src/theme/theme';
-import { saveRoutine } from '../src/database/database';
-import { useUserStore } from '../src/store/userStore';
-import { Exercise } from '../src/types/workout';
+import { useState } from 'react';
 import {
-  WeeklyFrequency,
-  SessionDuration,
-  PrimaryGoal,
-  ExperienceLevel,
-  EquipmentEnvironment,
-  PhysicalRestriction,
-  GuidedInputs,
-  GeneratedPlan,
-  PlannedExercise,
-  PlannedSession,
-  generateGuidedRoutine,
-} from '../src/services/recommendationEngine';
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SwapExerciseModal } from '../src/components/SwapExerciseModal';
+import { saveRoutine } from '../src/database/database';
+import {
+  EquipmentEnvironment,
+  ExperienceLevel,
+  GeneratedPlan,
+  GuidedInputs,
+  PhysicalRestriction,
+  PlannedExercise,
+  PrimaryGoal,
+  SessionDuration,
+  WeeklyFrequency,
+  generateGuidedRoutine
+} from '../src/services/recommendationEngine';
+import { useUserStore } from '../src/store/userStore';
+import Theme from '../src/theme/theme';
+import { Exercise } from '../src/types/workout';
 
 export default function OnboardingGuidedScreen() {
   const router = useRouter();
@@ -74,7 +63,7 @@ export default function OnboardingGuidedScreen() {
 
   // Navegação entre passos
   const handleNextStep = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     if (currentStep === 6) {
       // Ao sair do B6 para o B7, executa o motor algorítmico local
       const inputs: GuidedInputs = {
@@ -95,7 +84,7 @@ export default function OnboardingGuidedScreen() {
   };
 
   const handlePrevStep = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
     } else {
@@ -105,7 +94,7 @@ export default function OnboardingGuidedScreen() {
 
   // Gerenciamento de restrições (multi-select inteligente)
   const toggleRestriction = (res: PhysicalRestriction) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     if (res === 'none') {
       setRestrictions(['none']);
       return;
@@ -123,7 +112,7 @@ export default function OnboardingGuidedScreen() {
 
   // Abertura do modal de troca de exercício
   const openSwapModal = (sessionIndex: number, exerciseIndex: number, exercise: PlannedExercise) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     setExerciseToSwap({ sessionIndex, exerciseIndex, exercise });
     setSwapModalVisible(true);
   };
@@ -153,7 +142,7 @@ export default function OnboardingGuidedScreen() {
       sessions: updatedSessions,
     });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
   };
 
   // Persistência no SQLite e conclusão do onboarding
@@ -187,7 +176,7 @@ export default function OnboardingGuidedScreen() {
         onboardingTrack: 'guided',
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       Alert.alert(
         'Plano Ativado!',
         'Sua periodização personalizada foi calculada e gravada com sucesso no SQLite do heavy.io.',
@@ -234,11 +223,6 @@ export default function OnboardingGuidedScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.badgeHeader}>
-          <Sparkles size={13} color={Theme.colors.primary} />
-          <Text style={styles.badgeHeaderText}>MOTOR BIOMECÂNICO HEAVY.IO</Text>
-        </View>
-
         <Text style={styles.stepTitle}>{stepLabels[currentStep]}</Text>
 
         {/* ========================================================= */}
@@ -525,7 +509,7 @@ export default function OnboardingGuidedScreen() {
                     key={sess.id}
                     style={[styles.sessionTabPill, isActive && styles.sessionTabPillActive]}
                     onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
+                      Haptics.selectionAsync().catch(() => { });
                       setActiveSessionIndex(idx);
                     }}
                     activeOpacity={0.8}

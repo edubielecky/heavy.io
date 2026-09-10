@@ -1,29 +1,24 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView,
-  Alert 
-} from 'react-native';
-import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { 
-  Sliders, 
-  Compass, 
-  ArrowRight, 
-  CheckCircle2, 
+import { useRouter } from 'expo-router';
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
   Circle,
-  Dumbbell,
-  Sparkles,
-  Layers,
-  Zap,
-  Check
+  Compass,
+  Sliders
 } from 'lucide-react-native';
+import { useState } from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { OnboardingTrack, useUserStore } from '../src/store/userStore';
 import Theme from '../src/theme/theme';
-import { useUserStore, OnboardingTrack } from '../src/store/userStore';
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -36,13 +31,13 @@ export default function OnboardingScreen() {
   const handleSelectTrack = (track: OnboardingTrack) => {
     setSelectedTrack(track);
     setOnboardingTrack(track);
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
   };
 
   const handleContinue = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => { });
     setOnboardingTrack(selectedTrack);
-    
+
     if (selectedTrack === 'advanced') {
       router.push('/onboarding-advanced' as any);
     } else {
@@ -55,10 +50,6 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header Superior */}
         <View style={styles.header}>
-          <View style={styles.badgeStep}>
-            <Layers size={13} color={Theme.colors.primary} />
-            <Text style={styles.badgeStepText}>PRIMEIRO ACESSO • DEFINIÇÃO DE FLUXO</Text>
-          </View>
           <Text style={styles.title}>Como deseja estruturar seu treino?</Text>
           <Text style={styles.subtitle}>
             Personalize sua experiência de acordo com seu grau de controle e autonomia no treino de força.
@@ -173,8 +164,8 @@ export default function OnboardingScreen() {
           activeOpacity={0.85}
         >
           <Text style={styles.continueButtonText}>
-            {selectedTrack === 'advanced' 
-              ? 'Continuar com Fluxo Avançado' 
+            {selectedTrack === 'advanced'
+              ? 'Continuar com Fluxo Avançado'
               : 'Continuar com Fluxo Guiado'}
           </Text>
           <ArrowRight size={18} color={Theme.colors.textInverse} />

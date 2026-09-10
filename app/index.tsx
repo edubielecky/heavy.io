@@ -1,31 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ScrollView, 
-  ActivityIndicator,
-  Alert 
-} from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import * as Haptics from 'expo-haptics';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Dumbbell, AlertCircle } from 'lucide-react-native';
+import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import Theme from '../src/theme/theme';
-import { 
-  auth, 
-  googleProvider, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signInWithPopup, 
-  onAuthStateChanged 
+import {
+  auth,
+  createUserWithEmailAndPassword,
+  googleProvider,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup
 } from '../src/services/firebase';
 import { useUserStore } from '../src/store/userStore';
+import Theme from '../src/theme/theme';
 
 const videoSource = require('../assets/video/login_video.mp4');
 
@@ -86,7 +86,7 @@ export default function LoginScreen() {
     if (!email.trim() || !password.trim()) {
       const msg = 'Informe e-mail e senha para continuar.';
       setErrorMessage(msg);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => { });
       if (Platform.OS !== 'web') {
         Alert.alert('Campos Obrigatórios', msg);
       }
@@ -96,7 +96,7 @@ export default function LoginScreen() {
     if (password.length < 6) {
       const msg = 'A senha deve conter no mínimo 6 caracteres.';
       setErrorMessage(msg);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => { });
       if (Platform.OS !== 'web') {
         Alert.alert('Senha Curta', msg);
       }
@@ -104,28 +104,28 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
 
     try {
       if (isRegister) {
         // FLUXO 1: NOVO USUÁRIO -> CADASTRO & ONBOARDING
         await createUserWithEmailAndPassword(auth, email.trim(), password);
         setUserFlow('new_user');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         router.replace('/onboarding' as any);
       } else {
         // FLUXO 2: QUEM JÁ TEM CADASTRO -> LOGIN DIRETO PARA OS TREINOS
         await signInWithEmailAndPassword(auth, email.trim(), password);
         setUserFlow('existing_user');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
       }
     } catch (err: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => { });
       let message = 'Falha na autenticação. Verifique os dados e tente novamente.';
       if (
-        err.code === 'auth/invalid-credential' || 
-        err.code === 'auth/wrong-password' || 
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/wrong-password' ||
         err.code === 'auth/user-not-found'
       ) {
         message = isRegister
@@ -153,12 +153,12 @@ export default function LoginScreen() {
 
   const handleGoogleAuth = async () => {
     setGoogleLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
 
     try {
       if (Platform.OS === 'web') {
         const result = await signInWithPopup(auth, googleProvider);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         // Se ainda não completou onboarding, direciona para o fluxo de novo usuário
         router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
       } else {
@@ -185,7 +185,7 @@ export default function LoginScreen() {
   };
 
   const handleSkipOffline = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
   };
 
@@ -203,21 +203,17 @@ export default function LoginScreen() {
       <View style={styles.videoOverlay} />
 
       {/* 3. Conteúdo e Formulário de Login */}
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           {/* Header & Identidade da Marca */}
           <View style={styles.header}>
-            <View style={styles.brandBadge}>
-              <Dumbbell size={14} color={Theme.colors.primary} />
-              <Text style={styles.brandBadgeText}>TREINO DE FORÇA</Text>
-            </View>
             <Text style={styles.brandTitle}>
               heavy<Text style={styles.brandAccent}>.io</Text>
             </Text>
@@ -230,12 +226,12 @@ export default function LoginScreen() {
           <View style={styles.formCard}>
             {/* Alternador Entrar / Cadastrar */}
             <View style={styles.tabSwitch}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.tabButton, !isRegister && styles.tabButtonActive]}
                 onPress={() => {
                   setIsRegister(false);
                   setErrorMessage(null);
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                 }}
                 activeOpacity={0.8}
               >
@@ -244,12 +240,12 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.tabButton, isRegister && styles.tabButtonActive]}
                 onPress={() => {
                   setIsRegister(true);
                   setErrorMessage(null);
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                 }}
                 activeOpacity={0.8}
               >
@@ -299,7 +295,7 @@ export default function LoginScreen() {
                   if (errorMessage) setErrorMessage(null);
                 }}
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.eyeBtn}
                 onPress={() => setShowPassword(!showPassword)}
               >
@@ -312,7 +308,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Botão de Ação Primária (Entrar / Cadastrar) */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.primaryButton}
               onPress={handleEmailAuth}
               disabled={loading}
@@ -339,7 +335,7 @@ export default function LoginScreen() {
 
             {/* Botão de Login com o Google (Configurado no Firebase heavy-io) */}
             {/* Posicionado confortavelmente acima da margem e marca d'água */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.googleButton}
               onPress={handleGoogleAuth}
               disabled={googleLoading}
@@ -355,25 +351,18 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
           </View>
-
+          <br></br>
           {/* Botão de Treino Offline / Pular Login */}
-          <TouchableOpacity 
-            style={styles.skipButton}
+          <TouchableOpacity
+            style={styles.googleButton}
             onPress={handleSkipOffline}
             activeOpacity={0.7}
           >
             <ShieldCheck size={15} color={Theme.colors.textMuted} />
-            <Text style={styles.skipButtonText}>
+            <Text style={styles.googleButtonText}>
               Continuar como Convidado (Modo 100% Offline)
             </Text>
           </TouchableOpacity>
-
-          {/* Rodapé e Termos */}
-          <View style={styles.footerSpacing}>
-            <Text style={styles.termsText}>
-              heavy.io • Banco SQLite nativo local & Nuvem Firebase
-            </Text>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
