@@ -321,10 +321,12 @@ export const deleteCustomExercise = (exerciseId: string): boolean => {
  */
 export const getPrograms = (): WorkoutProgram[] => {
   if (!isInitialized) initDatabase();
-  return programs.map(p => ({
-    ...p,
-    routines: getRoutines().filter(r => r.programId === p.id),
-  }));
+  return [...programs]
+    .sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0))
+    .map(p => ({
+      ...p,
+      routines: routines.filter(r => r.programId === p.id).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)),
+    }));
 };
 
 export const getActiveProgram = (): WorkoutProgram | null => {
@@ -477,6 +479,13 @@ export const deleteDayFromProgram = (routineId: string): void => {
  */
 export const getRoutines = (): Routine[] => {
   if (!isInitialized) initDatabase();
+  const activeProg = programs.find(p => p.isActive);
+  if (activeProg) {
+    const progRoutines = routines.filter(r => r.programId === activeProg.id);
+    if (progRoutines.length > 0) {
+      return [...progRoutines].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    }
+  }
   return [...routines].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 };
 
