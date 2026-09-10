@@ -5,9 +5,9 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  SafeAreaView, 
   Alert 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { 
   Play, 
@@ -542,6 +542,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   container: {
     flex: 1,
@@ -550,6 +553,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 60,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   topBar: {
     flexDirection: 'row',
@@ -597,6 +603,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: '#121215',
     padding: 14,
     borderRadius: Theme.borderRadius.md,
@@ -864,6 +871,9 @@ const styles = StyleSheet.create({
   activeContainer: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   activeHeader: {
     flexDirection: 'row',
@@ -884,6 +894,7 @@ const styles = StyleSheet.create({
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 3,
   },

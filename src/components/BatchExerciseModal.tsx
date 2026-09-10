@@ -6,9 +6,9 @@ import {
   TextInput, 
   TouchableOpacity, 
   FlatList, 
-  StyleSheet, 
-  SafeAreaView 
+  StyleSheet 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, X, Check, Dumbbell, Plus, CheckCircle2, Circle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { getExercises } from '../database/database';
@@ -282,6 +282,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   container: {
     flex: 1,

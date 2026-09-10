@@ -13,7 +13,6 @@ import {
 import { useState, useMemo } from 'react';
 import {
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { SwapExerciseModal } from '../src/components/SwapExerciseModal';
 import { WorkoutAuditModal } from '../src/components/WorkoutAuditModal';
 import { saveRoutine, createProgram, setActiveProgram } from '../src/database/database';
@@ -1048,6 +1048,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   topBar: {
     flexDirection: 'row',
@@ -1095,6 +1098,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 60,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   profileBadgeBanner: {
     backgroundColor: '#121215',

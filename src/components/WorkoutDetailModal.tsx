@@ -6,8 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Calendar, Clock, Weight, Dumbbell, Trophy, Check, Award, Flame } from 'lucide-react-native';
 import Theme from '../theme/theme';
 import { WorkoutSession, WorkoutExercise, PersonalRecord } from '../types/workout';
@@ -238,9 +238,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

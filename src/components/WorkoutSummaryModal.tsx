@@ -286,6 +286,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.90)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalBox: {
     backgroundColor: Theme.colors.background,
@@ -294,6 +295,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
     maxHeight: '92%',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     paddingTop: 24,
     paddingBottom: 36,
   },

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Check, Trash2 } from 'lucide-react-native';
 import { WorkoutSet, SetType } from '../types/workout';
 import Theme from '../theme/theme';
@@ -8,6 +8,10 @@ interface SetRowProps {
   workoutExerciseId: string;
   set: WorkoutSet;
   previousPerformance?: string;
+  previousWeight?: number;
+  previousReps?: number;
+  targetRepsMin?: number;
+  targetRepsMax?: number;
   onUpdate: (updates: Partial<WorkoutSet>) => void;
   onToggleComplete: () => void;
   onDelete: () => void;
@@ -16,10 +20,44 @@ interface SetRowProps {
 export const SetRow: React.FC<SetRowProps> = ({
   set,
   previousPerformance,
+  previousWeight,
+  previousReps,
+  targetRepsMin,
+  targetRepsMax,
   onUpdate,
   onToggleComplete,
   onDelete,
 }) => {
+  // Estado local para digitação fluida sem interrupções de render/parsing
+  const [weightText, setWeightText] = useState<string>(() =>
+    set.weightKg === 0 ? '' : String(set.weightKg)
+  );
+  const [repsText, setRepsText] = useState<string>(() =>
+    set.reps === 0 ? '' : String(set.reps)
+  );
+
+  const [isWeightFocused, setIsWeightFocused] = useState(false);
+  const [isRepsFocused, setIsRepsFocused] = useState(false);
+
+  // Sincroniza o estado local apenas quando o valor numérico mudar externamente
+  useEffect(() => {
+    const formatted = set.weightKg === 0 ? '' : String(set.weightKg);
+    const currentParsed = parseFloat(weightText.replace(',', '.'));
+    const propVal = set.weightKg;
+    if (isNaN(currentParsed) ? propVal !== 0 : currentParsed !== propVal) {
+      setWeightText(formatted);
+    }
+  }, [set.weightKg]);
+
+  useEffect(() => {
+    const formatted = set.reps === 0 ? '' : String(set.reps);
+    const currentParsed = parseInt(repsText, 10);
+    const propVal = set.reps;
+    if (isNaN(currentParsed) ? propVal !== 0 : currentParsed !== propVal) {
+      setRepsText(formatted);
+    }
+  }, [set.reps]);
+
   const getBadgeStyle = (type: SetType) => {
     switch (type) {
       case 'warmup':
@@ -42,6 +80,104 @@ export const SetRow: React.FC<SetRowProps> = ({
     onUpdate({ type: nextType });
   };
 
+  const handleWeightChange = (text: string) => {
+    // Permite digitação contínua com ponto ou vírgula decimal (ex: "12", "12.", "12,5")
+    if (text === '' || /^\d*([.,]\d*)?$/.test(text)) {
+      setWeightText(text);
+
+      const normalized = text.replace(',', '.');
+      if (text === '' || text === '.' || text === ',') {
+        onUpdate({ weightKg: 0 });
+      } else {
+        const val = parseFloat(normalized);
+        if (!isNaN(val) && val >= 0) {
+          onUpdate({ weightKg: val });
+        }
+      }
+    }
+  };
+
+  const handleWeightBlur = () => {
+    setIsWeightFocused(false);
+    if (weightText === '' || weightText === '.' || weightText === ',') {
+      setWeightText('');
+      onUpdate({ weightKg: 0 });
+    } else {
+      const normalized = weightText.replace(',', '.');
+      const val = parseFloat(normalized);
+      if (!isNaN(val)) {
+        setWeightText(val === 0 ? '' : String(val));
+        onUpdate({ weightKg: val });
+      }
+    }
+  };
+
+  const handleRepsChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, '');
+    setRepsText(cleaned);
+
+    if (cleaned === '') {
+      onUpdate({ reps: 0 });
+    } else {
+      const val = parseInt(cleaned, 10);
+      if (!isNaN(val) && val >= 0) {
+        onUpdate({ reps: val });
+      }
+    }
+  };
+
+  const handleRepsBlur = () => {
+    setIsRepsFocused(false);
+    if (repsText === '') {
+      setRepsText('');
+      onUpdate({ reps: 0 });
+    } else {
+      const val = parseInt(repsText, 10);
+      if (!isNaN(val)) {
+        setRepsText(val === 0 ? '' : String(val));
+        onUpdate({ reps: val });
+      }
+    }
+  };
+
+  const handleToggleComplete = () => {
+    // Se a série ainda não foi concluída e os campos estiverem vazios/zerados,
+    // preenche com os valores de referência anterior/meta (padrão de apps de precisão)
+    if (!set.completed) {
+      const updates: Partial<WorkoutSet> = {};
+
+      if ((set.weightKg === 0 || weightText === '') && previousWeight && previousWeight > 0) {
+        updates.weightKg = previousWeight;
+        setWeightText(String(previousWeight));
+      }
+
+      if (set.reps === 0 || repsText === '') {
+        const fallbackReps = (previousReps && previousReps > 0)
+          ? previousReps
+          : (targetRepsMin || 10);
+        updates.reps = fallbackReps;
+        setRepsText(String(fallbackReps));
+      }
+
+      if (Object.keys(updates).length > 0) {
+        onUpdate(updates);
+      }
+    }
+
+    onToggleComplete();
+  };
+
+  // Placeholders contextuais inteligentes
+  const weightPlaceholder = previousWeight && previousWeight > 0 
+    ? String(previousWeight) 
+    : '0';
+
+  const repsPlaceholder = previousReps && previousReps > 0 
+    ? String(previousReps) 
+    : targetRepsMin 
+      ? String(targetRepsMin) 
+      : '10';
+
   return (
     <View style={[styles.row, set.completed && styles.rowCompleted]}>
       {/* Set Badge / Type Cycler */}
@@ -61,35 +197,59 @@ export const SetRow: React.FC<SetRowProps> = ({
       </View>
 
       {/* Carga (Kg) */}
-      <View style={styles.inputContainer}>
+      <View 
+        style={[
+          styles.inputContainer,
+          isWeightFocused && styles.inputContainerFocused,
+          set.completed && styles.inputContainerCompleted,
+        ]}
+      >
         <TextInput
-          style={[styles.input, set.completed && styles.inputCompleted]}
-          keyboardType="numeric"
+          style={[
+            styles.input,
+            set.completed && styles.inputCompleted,
+            Platform.OS === 'web' && ({ outline: 'none' } as any),
+          ]}
+          keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
+          inputMode="decimal"
           selectTextOnFocus
-          value={set.weightKg === 0 ? '' : set.weightKg.toString()}
-          placeholder="0"
-          placeholderTextColor={Theme.colors.textMuted}
-          onChangeText={(text) => {
-            const val = parseFloat(text.replace(',', '.'));
-            onUpdate({ weightKg: isNaN(val) ? 0 : val });
-          }}
+          value={weightText}
+          placeholder={weightPlaceholder}
+          placeholderTextColor={Theme.colors.borderLight}
+          onChangeText={handleWeightChange}
+          onFocus={() => setIsWeightFocused(true)}
+          onBlur={handleWeightBlur}
+          maxLength={6}
+          returnKeyType="done"
         />
         <Text style={styles.unitText}>kg</Text>
       </View>
 
       {/* Repetições */}
-      <View style={styles.inputContainer}>
+      <View 
+        style={[
+          styles.inputContainer,
+          isRepsFocused && styles.inputContainerFocused,
+          set.completed && styles.inputContainerCompleted,
+        ]}
+      >
         <TextInput
-          style={[styles.input, set.completed && styles.inputCompleted]}
-          keyboardType="numeric"
+          style={[
+            styles.input,
+            set.completed && styles.inputCompleted,
+            Platform.OS === 'web' && ({ outline: 'none' } as any),
+          ]}
+          keyboardType="number-pad"
+          inputMode="numeric"
           selectTextOnFocus
-          value={set.reps === 0 ? '' : set.reps.toString()}
-          placeholder="0"
-          placeholderTextColor={Theme.colors.textMuted}
-          onChangeText={(text) => {
-            const val = parseInt(text, 10);
-            onUpdate({ reps: isNaN(val) ? 0 : val });
-          }}
+          value={repsText}
+          placeholder={repsPlaceholder}
+          placeholderTextColor={Theme.colors.borderLight}
+          onChangeText={handleRepsChange}
+          onFocus={() => setIsRepsFocused(true)}
+          onBlur={handleRepsBlur}
+          maxLength={4}
+          returnKeyType="done"
         />
         <Text style={styles.unitText}>reps</Text>
       </View>
@@ -109,7 +269,7 @@ export const SetRow: React.FC<SetRowProps> = ({
           styles.checkBtn,
           set.completed ? styles.checkBtnCompleted : styles.checkBtnPending,
         ]}
-        onPress={onToggleComplete}
+        onPress={handleToggleComplete}
         activeOpacity={0.8}
       >
         <Check
@@ -173,9 +333,17 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surfaceElevated,
     borderRadius: Theme.borderRadius.sm,
     paddingHorizontal: 8,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
     height: 38,
     borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  inputContainerFocused: {
+    borderColor: '#FFFFFF',
+    backgroundColor: '#18181B',
+  },
+  inputContainerCompleted: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderColor: Theme.colors.border,
   },
   input: {
@@ -185,6 +353,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     padding: 0,
+    fontVariant: ['tabular-nums'],
   },
   inputCompleted: {
     color: Theme.colors.primary,

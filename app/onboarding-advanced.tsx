@@ -4,11 +4,11 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  SafeAreaView, 
   ScrollView, 
   TextInput,
   Alert 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { 
@@ -659,6 +659,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   topNav: {
     flexDirection: 'row',
@@ -695,6 +698,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 70,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   stepTitle: {
     fontSize: 22,

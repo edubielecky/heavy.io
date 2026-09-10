@@ -185,7 +185,7 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
       <View style={styles.tableHeader}>
         <Text style={[styles.columnLabel, { width: 34 }]}>SÉRIE</Text>
         <Text style={[styles.columnLabel, { width: 64, textAlign: 'center' }]}>ANTERIOR</Text>
-        <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>PESO</Text>
+        <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>PESO (KG)</Text>
         <Text style={[styles.columnLabel, { flex: 1, textAlign: 'center' }]}>REPS</Text>
         <Text style={[styles.columnLabel, { width: 44, textAlign: 'center' }]}>STATUS</Text>
       </View>
@@ -201,6 +201,10 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
             workoutExerciseId={workoutExercise.id}
             set={set}
             previousPerformance={prevString}
+            previousWeight={prevSet?.weightKg}
+            previousReps={prevSet?.reps}
+            targetRepsMin={workoutExercise.targetRepsMin}
+            targetRepsMax={workoutExercise.targetRepsMax}
             onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
             onToggleComplete={() => toggleSetCompleted(workoutExercise.id, set.id)}
             onDelete={() => removeSet(workoutExercise.id, set.id)}

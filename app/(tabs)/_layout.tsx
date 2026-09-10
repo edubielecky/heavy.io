@@ -1,9 +1,14 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, ListPlus, History, Trophy } from 'lucide-react-native';
 import Theme from '../../src/theme/theme';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(8, insets.bottom);
+  const barHeight = 54 + bottomPadding;
+
   return (
     <Tabs
       screenOptions={{
@@ -14,9 +19,9 @@ export default function TabLayout() {
           backgroundColor: Theme.colors.surface,
           borderTopColor: Theme.colors.border,
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: barHeight,
+          paddingBottom: bottomPadding,
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontSize: 11,

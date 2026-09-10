@@ -7,11 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, Dumbbell, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { 
@@ -356,6 +356,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

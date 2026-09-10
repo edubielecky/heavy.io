@@ -6,9 +6,9 @@ import {
   TextInput, 
   TouchableOpacity, 
   FlatList, 
-  StyleSheet, 
-  SafeAreaView 
+  StyleSheet 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, X, Dumbbell, Plus, Sparkles } from 'lucide-react-native';
 import { getExercises } from '../database/database';
 import { Exercise, MuscleGroup } from '../types/workout';
@@ -192,6 +192,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Theme.colors.background,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   container: {
     flex: 1,

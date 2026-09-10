@@ -6,9 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line, Circle, Rect, Text as SvgText, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { 
@@ -376,9 +376,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

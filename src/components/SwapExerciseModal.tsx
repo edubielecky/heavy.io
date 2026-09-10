@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { X, Search, RefreshCw, Dumbbell, ShieldCheck } from 'lucide-react-native';
 import Theme from '../theme/theme';
@@ -229,9 +229,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalContainer: {
     flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

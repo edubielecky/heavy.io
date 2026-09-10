@@ -390,8 +390,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 22,
     paddingTop: 50,
-    // Espaçamento generoso inferior para garantir que os elementos fiquem acima da estrela do Gemini
     paddingBottom: 75,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
   },
   header: {
     alignItems: 'center',

@@ -18,7 +18,8 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-import { Platform } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDatabase } from '../src/database/database';
 import { 
   initNotificationService, 
@@ -94,18 +95,60 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+const isWeb = Platform.OS === 'web';
+
 function RootLayoutNav() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#09090B' } }}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding-advanced" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding-guided" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true }} />
-      </Stack>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider value={DarkTheme}>
+        <StatusBar style="light" />
+        <View style={isWeb ? styles.webOuter : styles.nativeOuter}>
+          <View style={isWeb ? styles.mobileShell : styles.nativeShell}>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#09090B' } }}>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding-advanced" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding-guided" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true }} />
+            </Stack>
+          </View>
+        </View>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  nativeOuter: {
+    flex: 1,
+    backgroundColor: '#09090B',
+  },
+  nativeShell: {
+    flex: 1,
+    backgroundColor: '#09090B',
+  },
+  webOuter: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileShell: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    height: '100%',
+    backgroundColor: '#09090B',
+    overflow: 'hidden',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#27272A',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 25,
+  },
+});

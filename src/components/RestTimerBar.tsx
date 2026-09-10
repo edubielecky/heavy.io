@@ -67,8 +67,8 @@ export const RestTimerBar: React.FC = () => {
           <View style={styles.iconCircle}>
             <Timer size={18} color={Theme.colors.primary} />
           </View>
-          <View>
-            <Text style={styles.title}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
               Descanso {restTimer.exerciseName ? `• ${restTimer.exerciseName}` : ''}
             </Text>
             <Text style={styles.timerText}>{formatTime(restTimer.remainingSeconds)}</Text>
