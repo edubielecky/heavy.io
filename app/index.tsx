@@ -68,17 +68,20 @@ export default function LoginScreen() {
     p.play();
   });
 
-  // Listener para auto-login se já autenticado
+  const { hasCompletedOnboarding, isGuest, setIsGuest, setUserFlow } = useUserStore();
+
+  // Listener para auto-login se já autenticado ou se convidado já completou onboarding
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
       if (user) {
+        setIsGuest(false);
+        router.replace('/(tabs)');
+      } else if (isGuest && hasCompletedOnboarding) {
         router.replace('/(tabs)');
       }
     });
     return () => unsubscribe();
-  }, [router]);
-
-  const { hasCompletedOnboarding, setUserFlow } = useUserStore();
+  }, [router, isGuest, hasCompletedOnboarding]);
 
   const handleEmailAuth = async () => {
     setErrorMessage(null);
@@ -110,12 +113,14 @@ export default function LoginScreen() {
       if (isRegister) {
         // FLUXO 1: NOVO USUÁRIO -> CADASTRO & ONBOARDING
         await createUserWithEmailAndPassword(auth, email.trim(), password);
+        setIsGuest(false);
         setUserFlow('new_user');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         router.replace('/onboarding' as any);
       } else {
         // FLUXO 2: QUEM JÁ TEM CADASTRO -> LOGIN DIRETO PARA OS TREINOS
         await signInWithEmailAndPassword(auth, email.trim(), password);
+        setIsGuest(false);
         setUserFlow('existing_user');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
@@ -158,6 +163,7 @@ export default function LoginScreen() {
     try {
       if (Platform.OS === 'web') {
         const result = await signInWithPopup(auth, googleProvider);
+        setIsGuest(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         // Se ainda não completou onboarding, direciona para o fluxo de novo usuário
         router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
@@ -165,8 +171,10 @@ export default function LoginScreen() {
         // No Android/iOS nativo
         try {
           await signInWithPopup(auth, googleProvider);
+          setIsGuest(false);
           router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
         } catch {
+          setIsGuest(false);
           Alert.alert(
             'Google Sign-In',
             'Conectando ao serviço Google do heavy-io...',
@@ -186,6 +194,8 @@ export default function LoginScreen() {
 
   const handleSkipOffline = () => {
     Haptics.selectionAsync().catch(() => { });
+    setIsGuest(true);
+    setUserFlow('guest');
     router.replace((hasCompletedOnboarding ? '/(tabs)' : '/onboarding') as any);
   };
 

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type UserFlowType = 'new_user' | 'existing_user';
+export type UserFlowType = 'new_user' | 'existing_user' | 'guest';
 export type OnboardingTrack = 'advanced' | 'guided';
 
 export interface UserPreferences {
@@ -34,12 +34,14 @@ export interface UserProfile {
 
 interface UserStoreState {
   hasCompletedOnboarding: boolean;
+  isGuest: boolean;
   userFlow: UserFlowType;
   onboardingTrack: OnboardingTrack | null;
   profile: UserProfile | null;
   preferences: UserPreferences;
 
   // Ações de gerenciamento dos fluxos
+  setIsGuest: (isGuest: boolean) => void;
   setUserFlow: (flow: UserFlowType) => void;
   setOnboardingTrack: (track: OnboardingTrack) => void;
   setProfile: (profile: Partial<UserProfile>) => void;
@@ -55,6 +57,7 @@ export const useUserStore = create<UserStoreState>()(
   persist(
     (set, get) => ({
       hasCompletedOnboarding: false,
+      isGuest: false,
       userFlow: 'existing_user',
       onboardingTrack: null,
       profile: {
@@ -67,6 +70,10 @@ export const useUserStore = create<UserStoreState>()(
         defaultRestSeconds: 90,
         soundEnabled: true,
         vibrationEnabled: true,
+      },
+
+      setIsGuest: (isGuest: boolean) => {
+        set({ isGuest });
       },
 
       setUserFlow: (flow: UserFlowType) => {
@@ -99,7 +106,7 @@ export const useUserStore = create<UserStoreState>()(
         const current = get().profile || {};
         set({
           hasCompletedOnboarding: true,
-          userFlow: 'existing_user',
+          userFlow: get().isGuest ? 'guest' : 'existing_user',
           profile: {
             ...current,
             ...(profileData || {}),
@@ -118,6 +125,7 @@ export const useUserStore = create<UserStoreState>()(
       resetUserFlow: () => {
         set({
           hasCompletedOnboarding: false,
+          isGuest: false,
           userFlow: 'new_user',
           profile: null,
         });
@@ -126,6 +134,7 @@ export const useUserStore = create<UserStoreState>()(
       logout: () => {
         set({
           hasCompletedOnboarding: false,
+          isGuest: false,
           userFlow: 'new_user',
           profile: null,
           onboardingTrack: null,
@@ -138,6 +147,7 @@ export const useUserStore = create<UserStoreState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: state => ({
         hasCompletedOnboarding: state.hasCompletedOnboarding,
+        isGuest: state.isGuest,
         userFlow: state.userFlow,
         onboardingTrack: state.onboardingTrack,
         profile: state.profile,

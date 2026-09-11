@@ -8,11 +8,14 @@ import {
   TouchableOpacity,
   Switch,
   Modal,
-  Alert
+  Alert,
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Svg, { Path } from 'react-native-svg';
 import { 
   User, 
   Scale, 
@@ -37,14 +40,50 @@ import {
   Activity,
   Download,
   Upload,
-  Layers
+  Layers,
+  HardDrive,
+  ShieldCheck,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle
 } from 'lucide-react-native';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { useUserStore, UserProfile } from '../../src/store/userStore';
 import { getRoutines, getActiveProgram } from '../../src/database/database';
 import { Routine, WorkoutProgram } from '../../src/types/workout';
-import { auth, signOut } from '../../src/services/firebase';
-import { processSyncQueue } from '../../src/services/syncQueueService';
+import { 
+  auth, 
+  signOut, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup, 
+  googleProvider 
+} from '../../src/services/firebase';
+import { processSyncQueue, syncAllLocalDataToCloud } from '../../src/services/syncQueueService';
+
+// Ícone do Google em SVG de alta fidelidade
+const GoogleIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path
+      fill="#4285F4"
+      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+    />
+    <Path
+      fill="#34A853"
+      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+    />
+    <Path
+      fill="#FBBC05"
+      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+    />
+    <Path
+      fill="#EA4335"
+      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+    />
+  </Svg>
+);
 import { 
   getHealthConnectStatus, 
   requestHealthConnectAccess, 
@@ -59,6 +98,8 @@ export default function AthleteControlCenterScreen() {
   const router = useRouter();
   const { workoutHistory, loadFromDatabase, discardActiveSession } = useWorkoutStore();
   const { 
+    isGuest,
+    setIsGuest,
     profile, 
     preferences, 
     updateMetrics, 
@@ -66,6 +107,17 @@ export default function AthleteControlCenterScreen() {
     resetOnboarding,
     logout
   } = useUserStore();
+
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(u => {
+      setCurrentUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isGuestMode = isGuest || !currentUser;
 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [activeProgram, setActiveProgramState] = useState<WorkoutProgram | null>(null);
@@ -76,6 +128,16 @@ export default function AthleteControlCenterScreen() {
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Estados para Conexão de Conta do Convidado com a Nuvem
+  const [isConnectAccountModalOpen, setIsConnectAccountModalOpen] = useState(false);
+  const [isRegisteringAccount, setIsRegisteringAccount] = useState(true);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [isAccountLoading, setIsAccountLoading] = useState(false);
+  const [accountErrorMessage, setAccountErrorMessage] = useState<string | null>(null);
+  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
 
   // Estado da Conexão com Health Connect
   const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | null>(null);
@@ -203,6 +265,11 @@ export default function AthleteControlCenterScreen() {
 
   // Sincronização manual com Firebase
   const handleTriggerSync = async () => {
+    if (isGuestMode) {
+      setSyncFeedback('Modo local ativo. Conecte sua conta para sincronizar com a nuvem.');
+      setTimeout(() => setSyncFeedback(null), 4000);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setIsSyncingCloud(true);
     setSyncFeedback(null);
@@ -219,6 +286,118 @@ export default function AthleteControlCenterScreen() {
     } finally {
       setIsSyncingCloud(false);
       setTimeout(() => setSyncFeedback(null), 4000);
+    }
+  };
+
+  // Conexão com Conta Google para Convidados
+  const handleGoogleConnect = async () => {
+    setIsGoogleConnecting(true);
+    setSyncFeedback(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    try {
+      let loggedUser = null;
+      if (Platform.OS === 'web') {
+        const result = await signInWithPopup(auth, googleProvider);
+        loggedUser = result.user;
+      } else {
+        try {
+          const result = await signInWithPopup(auth, googleProvider);
+          loggedUser = result.user;
+        } catch {
+          Alert.alert(
+            'Google Sign-In',
+            'Conectando ao serviço Google do heavy-io...',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+
+      if (loggedUser) {
+        setIsGuest(false);
+        const syncResult = await syncAllLocalDataToCloud(loggedUser);
+        const msg = `Conta Google conectada! ${syncResult.sessionsSynced} treino(s) e ${syncResult.prsSynced} recorde(s) sincronizados na nuvem.`;
+        setSyncFeedback(msg);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Erro ao conectar Google no perfil:', err);
+      setSyncFeedback('Não foi possível conectar com o Google no momento.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    } finally {
+      setIsGoogleConnecting(false);
+      setTimeout(() => setSyncFeedback(null), 6000);
+    }
+  };
+
+  // Criação ou Login com Conta heavy.io (E-mail/Senha) para Convidados
+  const handleEmailAccountConnect = async () => {
+    setAccountErrorMessage(null);
+
+    if (!accountEmail.trim() || !accountPassword.trim()) {
+      const msg = 'Informe e-mail e senha para continuar.';
+      setAccountErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      return;
+    }
+
+    if (accountPassword.length < 6) {
+      const msg = 'A senha deve conter no mínimo 6 caracteres.';
+      setAccountErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      return;
+    }
+
+    setIsAccountLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+    try {
+      let userCred;
+      if (isRegisteringAccount) {
+        userCred = await createUserWithEmailAndPassword(auth, accountEmail.trim(), accountPassword);
+      } else {
+        userCred = await signInWithEmailAndPassword(auth, accountEmail.trim(), accountPassword);
+      }
+
+      const connectedUser = userCred.user;
+      setIsGuest(false);
+
+      // Sincroniza retroativamente todos os dados salvos localmente
+      const syncResult = await syncAllLocalDataToCloud(connectedUser);
+
+      setIsConnectAccountModalOpen(false);
+      setAccountEmail('');
+      setAccountPassword('');
+      const actionText = isRegisteringAccount ? 'criada' : 'conectada';
+      const msg = `Conta heavy.io ${actionText}! ${syncResult.sessionsSynced} treino(s) e ${syncResult.prsSynced} recorde(s) sincronizados.`;
+      setSyncFeedback(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      let message = 'Falha na autenticação. Verifique os dados e tente novamente.';
+      if (err.code === 'auth/email-already-in-use') {
+        message = 'Este e-mail já está cadastrado. Alterne para a aba "ENTRAR".';
+      } else if (
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/user-not-found'
+      ) {
+        message = isRegisteringAccount
+          ? 'Não foi possível cadastrar com os dados informados.'
+          : 'E-mail ou senha incorretos ou usuário inexistente.';
+      } else if (err.code === 'auth/invalid-email') {
+        message = 'Formato de e-mail inválido. Verifique o endereço digitado.';
+      } else if (err.code === 'auth/weak-password') {
+        message = 'A senha escolhida é muito fraca. Mínimo de 6 caracteres.';
+      } else if (err.code === 'auth/too-many-requests') {
+        message = 'Muitas tentativas incorretas. Aguarde alguns instantes.';
+      } else if (err.code === 'auth/network-request-failed') {
+        message = 'Falha de conexão com a rede. Verifique sua internet.';
+      }
+      setAccountErrorMessage(message);
+    } finally {
+      setIsAccountLoading(false);
+      setTimeout(() => setSyncFeedback(null), 6000);
     }
   };
 
@@ -298,17 +477,24 @@ export default function AthleteControlCenterScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.athleteName}>
-              {auth.currentUser?.displayName || 'Atleta de Força'}
+              {currentUser?.displayName || (isGuestMode ? 'Atleta Convidado' : (profile?.name || 'Atleta de Força'))}
             </Text>
             <Text style={styles.athleteEmail}>
-              {auth.currentUser?.email || 'Modo Local • 100% Offline'}
+              {currentUser?.email || 'Modo Convidado • Armazenamento Local'}
             </Text>
           </View>
           <View style={styles.headerRightActions}>
-            <View style={styles.badgeOffline}>
-              <CheckCircle2 size={12} color={Theme.colors.success} />
-              <Text style={styles.badgeOfflineText}>Ativo</Text>
-            </View>
+            {isGuestMode ? (
+              <View style={styles.badgeGuestHeader}>
+                <HardDrive size={11} color={Theme.colors.textMuted} />
+                <Text style={styles.badgeGuestHeaderText}>100% Local</Text>
+              </View>
+            ) : (
+              <View style={styles.badgeOffline}>
+                <CheckCircle2 size={12} color={Theme.colors.success} />
+                <Text style={styles.badgeOfflineText}>Nuvem Ativa</Text>
+              </View>
+            )}
             <TouchableOpacity 
               style={styles.headerLogoutBtn}
               onPress={handleConfirmLogout}
@@ -625,35 +811,100 @@ export default function AthleteControlCenterScreen() {
         {/* 6. Conta & Sincronização em Nuvem */}
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Cloud size={16} color={Theme.colors.primary} />
-          <Text style={styles.sectionTitle}>Sincronização em Nuvem</Text>
+          <Text style={styles.sectionTitle}>
+            {isGuestMode ? 'Conexão em Nuvem' : 'Sincronização em Nuvem'}
+          </Text>
         </View>
 
-        <View style={styles.cloudCard}>
-          <View style={styles.cloudRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cloudTitle}>Sync Queue (Offline-First)</Text>
-              <Text style={styles.cloudSub}>
-                {syncFeedback || 'Seus treinos são salvos no SQLite e espelhados no Firebase.'}
+        {isGuestMode ? (
+          <View style={styles.guestCloudCard}>
+            <View style={styles.guestCloudHeader}>
+              <View style={styles.guestBadge}>
+                <HardDrive size={11} color={Theme.colors.textMuted} />
+                <Text style={styles.guestBadgeText}>MODO LOCAL • 100% OFFLINE</Text>
+              </View>
+            </View>
+
+            <Text style={styles.guestCloudTitle}>Conectar com a Nuvem</Text>
+            <Text style={styles.guestCloudSub}>
+              Seus treinos estão salvos exclusivamente na memória deste aparelho. Conecte sua conta para fazer backup contínuo e sincronizar seus dados em caso de troca ou formatação de dispositivo.
+            </Text>
+
+            {/* Resumo de Dados Locais Prontos para Sincronizar */}
+            <View style={styles.localDataPill}>
+              <View style={styles.localDataDot} />
+              <Text style={styles.localDataText}>
+                <Text style={styles.localDataHighlight}>{workoutHistory.length}</Text> treino(s) e <Text style={styles.localDataHighlight}>{Object.keys(useWorkoutStore.getState().personalRecords || {}).length}</Text> recorde(s) prontos para migração
               </Text>
             </View>
-            <TouchableOpacity 
-              style={styles.syncNowBtn}
-              onPress={handleTriggerSync}
-              disabled={isSyncingCloud}
-              activeOpacity={0.7}
-            >
-              <RefreshCw 
-                size={14} 
-                color={Theme.colors.background} 
-                style={isSyncingCloud ? { opacity: 0.5 } : {}}
-              />
-              <Text style={styles.syncNowBtnText}>
-                {isSyncingCloud ? 'Enviando...' : 'Sincronizar'}
-              </Text>
-            </TouchableOpacity>
-          </View>
 
-        </View>
+            {syncFeedback ? (
+              <View style={styles.feedbackBanner}>
+                <CheckCircle2 size={14} color={Theme.colors.success} />
+                <Text style={styles.feedbackBannerText}>{syncFeedback}</Text>
+              </View>
+            ) : null}
+
+            {/* Ações de Conexão com a Nuvem */}
+            <View style={styles.guestActionsContainer}>
+              <TouchableOpacity
+                style={styles.guestGoogleBtn}
+                onPress={handleGoogleConnect}
+                disabled={isGoogleConnecting}
+                activeOpacity={0.85}
+              >
+                {isGoogleConnecting ? (
+                  <ActivityIndicator size="small" color={Theme.colors.text} />
+                ) : (
+                  <>
+                    <GoogleIcon size={16} />
+                    <Text style={styles.guestGoogleBtnText}>Continuar com Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.guestHeavyBtn}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setAccountErrorMessage(null);
+                  setIsRegisteringAccount(true);
+                  setIsConnectAccountModalOpen(true);
+                }}
+                activeOpacity={0.85}
+              >
+                <Mail size={15} color={Theme.colors.textInverse} />
+                <Text style={styles.guestHeavyBtnText}>Criar Conta heavy.io / Entrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.cloudCard}>
+            <View style={styles.cloudRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cloudTitle}>Sync Queue (Offline-First)</Text>
+                <Text style={styles.cloudSub}>
+                  {syncFeedback || 'Seus treinos são salvos no SQLite e espelhados no Firebase.'}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.syncNowBtn}
+                onPress={handleTriggerSync}
+                disabled={isSyncingCloud}
+                activeOpacity={0.7}
+              >
+                <RefreshCw 
+                  size={14} 
+                  color={Theme.colors.background} 
+                  style={isSyncingCloud ? { opacity: 0.5 } : {}}
+                />
+                <Text style={styles.syncNowBtnText}>
+                  {isSyncingCloud ? 'Enviando...' : 'Sincronizar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* 7. Conta & Sessão */}
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
@@ -668,10 +919,10 @@ export default function AthleteControlCenterScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.accountEmailText} numberOfLines={1}>
-                {auth.currentUser?.email || 'Atleta de Força (Modo Local)'}
+                {currentUser?.email || 'Atleta de Força (Modo Convidado)'}
               </Text>
               <Text style={styles.accountStatusSub}>
-                {auth.currentUser ? 'Autenticado via Firebase Auth' : 'Modo Offline • Sem login'}
+                {currentUser ? 'Autenticado via Firebase Auth' : 'Armazenamento 100% Local • Sem Nuvem'}
               </Text>
             </View>
           </View>
@@ -684,7 +935,9 @@ export default function AthleteControlCenterScreen() {
             activeOpacity={0.7}
           >
             <LogOut size={16} color={Theme.colors.danger} />
-            <Text style={styles.fullLogoutBtnText}>Encerrar Sessão da Conta</Text>
+            <Text style={styles.fullLogoutBtnText}>
+              {isGuestMode ? 'Encerrar Modo Convidado' : 'Encerrar Sessão da Conta'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -923,6 +1176,158 @@ export default function AthleteControlCenterScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 5: Conectar com a Nuvem (Criar Conta heavy.io ou Entrar) */}
+      <Modal
+        visible={isConnectAccountModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isAccountLoading) setIsConnectAccountModalOpen(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.connectAccountModalBox}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Conectar com a Nuvem</Text>
+                <Text style={styles.modalHeaderSub}>
+                  Sincronize todo o histórico e dados locais deste aparelho
+                </Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => {
+                  if (!isAccountLoading) setIsConnectAccountModalOpen(false);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color={Theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Alternador Criar Conta / Entrar */}
+            <View style={styles.accountTabSwitch}>
+              <TouchableOpacity
+                style={[styles.accountTabBtn, isRegisteringAccount && styles.accountTabBtnActive]}
+                onPress={() => {
+                  setIsRegisteringAccount(true);
+                  setAccountErrorMessage(null);
+                  Haptics.selectionAsync().catch(() => {});
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.accountTabBtnText, isRegisteringAccount && styles.accountTabBtnTextActive]}>
+                  CRIAR CONTA
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.accountTabBtn, !isRegisteringAccount && styles.accountTabBtnActive]}
+                onPress={() => {
+                  setIsRegisteringAccount(false);
+                  setAccountErrorMessage(null);
+                  Haptics.selectionAsync().catch(() => {});
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.accountTabBtnText, !isRegisteringAccount && styles.accountTabBtnTextActive]}>
+                  ENTRAR
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Banner de Erro */}
+            {accountErrorMessage ? (
+              <View style={styles.accountErrorBanner}>
+                <AlertCircle size={14} color="#EF4444" style={{ flexShrink: 0 }} />
+                <Text style={styles.accountErrorBannerText}>{accountErrorMessage}</Text>
+              </View>
+            ) : null}
+
+            {/* Formulário de Credenciais */}
+            <View style={styles.accountInputsContainer}>
+              <View style={styles.accountInputWrapper}>
+                <Mail size={16} color={Theme.colors.textMuted} style={styles.accountInputIcon} />
+                <TextInput
+                  style={styles.accountTextInput}
+                  placeholder="E-mail"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={accountEmail}
+                  onChangeText={val => {
+                    setAccountEmail(val);
+                    if (accountErrorMessage) setAccountErrorMessage(null);
+                  }}
+                />
+              </View>
+
+              <View style={styles.accountInputWrapper}>
+                <Lock size={16} color={Theme.colors.textMuted} style={styles.accountInputIcon} />
+                <TextInput
+                  style={styles.accountTextInput}
+                  placeholder="Senha (mínimo 6 dígitos)"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  secureTextEntry={!showAccountPassword}
+                  value={accountPassword}
+                  onChangeText={val => {
+                    setAccountPassword(val);
+                    if (accountErrorMessage) setAccountErrorMessage(null);
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.accountEyeBtn}
+                  onPress={() => setShowAccountPassword(!showAccountPassword)}
+                >
+                  {showAccountPassword ? (
+                    <EyeOff size={16} color={Theme.colors.textMuted} />
+                  ) : (
+                    <Eye size={16} color={Theme.colors.textMuted} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Botão de Ação Primária */}
+            <TouchableOpacity
+              style={styles.accountPrimaryBtn}
+              onPress={handleEmailAccountConnect}
+              disabled={isAccountLoading}
+              activeOpacity={0.85}
+            >
+              {isAccountLoading ? (
+                <ActivityIndicator size="small" color={Theme.colors.textInverse} />
+              ) : (
+                <Text style={styles.accountPrimaryBtnText}>
+                  {isRegisteringAccount ? 'Criar Conta e Sincronizar' : 'Entrar e Sincronizar'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Divisor "OU" */}
+            <View style={styles.accountDividerRow}>
+              <View style={styles.accountDividerLine} />
+              <Text style={styles.accountDividerText}>OU</Text>
+              <View style={styles.accountDividerLine} />
+            </View>
+
+            {/* Botão Google dentro do Modal */}
+            <TouchableOpacity
+              style={styles.accountGoogleBtn}
+              onPress={async () => {
+                setIsConnectAccountModalOpen(false);
+                await handleGoogleConnect();
+              }}
+              disabled={isGoogleConnecting}
+              activeOpacity={0.85}
+            >
+              <GoogleIcon size={16} />
+              <Text style={styles.accountGoogleBtnText}>Continuar com Google</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1671,5 +2076,273 @@ const styles = StyleSheet.create({
     color: Theme.colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
+  },
+  badgeGuestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#18181B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  badgeGuestHeaderText: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  guestCloudCard: {
+    backgroundColor: 'rgba(18, 18, 21, 0.95)',
+    borderRadius: Theme.borderRadius.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  guestCloudHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  guestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  guestBadgeText: {
+    color: Theme.colors.textMuted,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  guestCloudTitle: {
+    color: Theme.colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  guestCloudSub: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  localDataPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#09090B',
+    borderRadius: Theme.borderRadius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: 14,
+  },
+  localDataDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Theme.colors.accentFlame || '#F59E0B',
+  },
+  localDataText: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+  },
+  localDataHighlight: {
+    color: Theme.colors.text,
+    fontWeight: '700',
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderRadius: Theme.borderRadius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
+    marginBottom: 14,
+  },
+  feedbackBannerText: {
+    color: '#86EFAC',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  guestActionsContainer: {
+    gap: 10,
+  },
+  guestGoogleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#18181B',
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  guestGoogleBtnText: {
+    color: Theme.colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  guestHeavyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Theme.colors.primary,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.md,
+  },
+  guestHeavyBtnText: {
+    color: Theme.colors.textInverse,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  connectAccountModalBox: {
+    backgroundColor: '#121215',
+    borderRadius: Theme.borderRadius.lg,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    width: '100%',
+    maxWidth: 420,
+  },
+  modalHeaderSub: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  accountTabSwitch: {
+    flexDirection: 'row',
+    backgroundColor: '#09090B',
+    borderRadius: Theme.borderRadius.sm,
+    padding: 3,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  accountTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 4,
+  },
+  accountTabBtnActive: {
+    backgroundColor: Theme.colors.surfaceElevated,
+  },
+  accountTabBtnText: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  accountTabBtnTextActive: {
+    color: Theme.colors.text,
+    fontWeight: '800',
+  },
+  accountErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#18181B',
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  accountErrorBannerText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  accountInputsContainer: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  accountInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#09090B',
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  accountInputIcon: {
+    marginRight: 10,
+  },
+  accountTextInput: {
+    flex: 1,
+    color: Theme.colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  accountEyeBtn: {
+    padding: 6,
+  },
+  accountPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.primary,
+    height: 46,
+    borderRadius: Theme.borderRadius.md,
+  },
+  accountPrimaryBtnText: {
+    color: Theme.colors.textInverse,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  accountDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+    gap: 10,
+  },
+  accountDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Theme.colors.border,
+  },
+  accountDividerText: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  accountGoogleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#18181B',
+    height: 46,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  accountGoogleBtnText: {
+    color: Theme.colors.text,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
