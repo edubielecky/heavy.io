@@ -27,7 +27,7 @@ import {
 } from 'lucide-react-native';
 import Theme from '../src/theme/theme';
 import { Exercise } from '../src/types/workout';
-import { saveRoutine } from '../src/database/database';
+import { createProgram, setActiveProgram } from '../src/database/database';
 import { useUserStore } from '../src/store/userStore';
 import { BatchExerciseModal } from '../src/components/BatchExerciseModal';
 
@@ -303,27 +303,26 @@ export default function OnboardingAdvancedScreen() {
       return;
     }
 
-    // 1. Grava cada sessão como uma rotina no SQLite
     try {
-      sessions.forEach((sess, sIdx) => {
-        saveRoutine({
-          id: `routine_${Date.now()}_${sIdx}`,
+      // 1. Cria um NOVO programa isolado com as sessões configuradas
+      const createdProg = createProgram(
+        'Meu Treino (Avançado)',
+        'Estrutura criada manualmente pelo usuário',
+        sessions.map(sess => ({
           name: sess.name,
           description: sess.dayOfWeek ? `Dia sugerido: ${sess.dayOfWeek}` : undefined,
-          isSystem: false,
           exercises: sess.exercises.map((ex, exIdx) => ({
-            id: `re_${Date.now()}_${sIdx}_${exIdx}`,
             exerciseId: ex.exerciseId,
-            exerciseName: ex.exerciseName,
-            targetMuscle: ex.targetMuscle as any,
-            orderIndex: exIdx,
             targetSets: ex.targetSets,
             targetRepsMin: ex.targetRepsMin,
             targetRepsMax: ex.targetRepsMax,
             restSeconds: ex.restSeconds,
-          })),
-        });
-      });
+          }))
+        }))
+      );
+
+      // Ativa o novo programa recém-criado, desativando os anteriores
+      setActiveProgram(createdProg.id);
 
       // 2. Marca onboarding como concluído na store
       completeOnboarding({
