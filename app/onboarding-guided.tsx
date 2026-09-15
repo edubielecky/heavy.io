@@ -10,7 +10,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react-native';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,7 +24,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SwapExerciseModal } from '../src/components/SwapExerciseModal';
 import { WorkoutAuditModal } from '../src/components/WorkoutAuditModal';
-import { saveRoutine, createProgram, setActiveProgram } from '../src/database/database';
+import { createProgram, setActiveProgram } from '../src/database/database';
 import {
   EquipmentEnvironment,
   ExperienceLevel,
@@ -35,8 +35,8 @@ import {
   PrimaryGoal,
   SessionDuration,
   WeeklyFrequency,
-  generateGuidedRoutine,
   generateAiGuidedRoutine,
+  generateGuidedRoutine,
 } from '../src/services/recommendationEngine';
 import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userStore';
 import Theme from '../src/theme/theme';
@@ -176,7 +176,7 @@ export default function OnboardingGuidedScreen() {
 
   // Navegação entre passos
   const handleNextStep = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     const nextIndex = currentStepIndex + 1;
     // Ao avançar para a última etapa (result), executa a síntese fisiológica com IA
     if (nextIndex === stepsOrder.length - 1) {
@@ -225,7 +225,7 @@ export default function OnboardingGuidedScreen() {
   };
 
   const handleRegenerateWithAi = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     const parsedAge = parseInt(age, 10) || profile?.age || 26;
     const parsedWeight = parseFloat(weight.replace(',', '.')) || profile?.bodyWeightKg || 78;
     const parsedHeight = parseFloat(height.replace(',', '.')) || profile?.heightCm || 176;
@@ -253,7 +253,7 @@ export default function OnboardingGuidedScreen() {
       .then((plan) => {
         setGeneratedPlan(plan);
         setActiveSessionIndex(0);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       })
       .catch((err) => {
         console.error('[heavy.io] Falha ao regerar com IA:', err?.message || err);
@@ -265,7 +265,7 @@ export default function OnboardingGuidedScreen() {
   };
 
   const handlePrevStep = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     if (currentStepIndex > 0) {
       setCurrentStepIndex(prev => prev - 1);
     } else {
@@ -275,7 +275,7 @@ export default function OnboardingGuidedScreen() {
 
   // Gerenciamento de restrições (multi-select inteligente)
   const toggleRestriction = (res: PhysicalRestriction) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     if (res === 'none') {
       setRestrictions(['none']);
       return;
@@ -293,7 +293,7 @@ export default function OnboardingGuidedScreen() {
 
   // Abertura do modal de troca de exercício
   const openSwapModal = (sessionIndex: number, exerciseIndex: number, exercise: PlannedExercise) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     setExerciseToSwap({ sessionIndex, exerciseIndex, exercise });
     setSwapModalVisible(true);
   };
@@ -323,7 +323,7 @@ export default function OnboardingGuidedScreen() {
       sessions: updatedSessions,
     });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
   };
 
   // Persistência no SQLite e conclusão/ativação da ficha
@@ -381,7 +381,7 @@ export default function OnboardingGuidedScreen() {
         physicalRestrictions: restrictions as any,
       });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
 
       // 3. Redirecionamento DIRETO para a tela principal (tabs) sem bloqueio de alert
       router.replace('/(tabs)' as any);
@@ -477,7 +477,7 @@ export default function OnboardingGuidedScreen() {
                     biologicalSex === 'male' && styles.toggleBtnActive,
                   ]}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     setBiologicalSex('male');
                   }}
                   activeOpacity={0.85}
@@ -499,7 +499,7 @@ export default function OnboardingGuidedScreen() {
                     biologicalSex === 'female' && styles.toggleBtnActive,
                   ]}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     setBiologicalSex('female');
                   }}
                   activeOpacity={0.85}
@@ -899,10 +899,10 @@ export default function OnboardingGuidedScreen() {
                 <Text style={styles.aiLoadingMetricLabel}>Foco Muscular</Text>
                 <Text style={styles.aiLoadingMetricValue}>
                   {musclePriority === 'balanced' ? 'Equilíbrio Fisiológico' :
-                   musclePriority === 'chest' ? 'Peitoral' :
-                   musclePriority === 'back' ? 'Costas & Dorsais' :
-                   musclePriority === 'legs_glutes' ? 'Pernas & Glúteos' :
-                   musclePriority === 'shoulders' ? 'Deltoides' : 'Braços'}
+                    musclePriority === 'chest' ? 'Peitoral' :
+                      musclePriority === 'back' ? 'Costas & Dorsais' :
+                        musclePriority === 'legs_glutes' ? 'Pernas & Glúteos' :
+                          musclePriority === 'shoulders' ? 'Deltoides' : 'Braços'}
                 </Text>
               </View>
               <View style={styles.aiLoadingMetricRow}>
@@ -920,7 +920,7 @@ export default function OnboardingGuidedScreen() {
             </View>
 
             <Text style={styles.aiLoadingHint}>
-              IA Gemini 3.6 Flash consultando catálogo de mais de 120 exercícios.
+              Consultando catálogo de +120 exercícios...
             </Text>
           </View>
         )}
@@ -1019,7 +1019,7 @@ export default function OnboardingGuidedScreen() {
                 <TouchableOpacity
                   style={styles.aiAuditOpenBtn}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     setIsAuditModalOpen(true);
                   }}
                   activeOpacity={0.8}
@@ -1049,7 +1049,7 @@ export default function OnboardingGuidedScreen() {
                     key={sess.id}
                     style={[styles.sessionTabPill, isActive && styles.sessionTabPillActive]}
                     onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
+                      Haptics.selectionAsync().catch(() => { });
                       setActiveSessionIndex(idx);
                     }}
                     activeOpacity={0.8}
