@@ -244,10 +244,65 @@ export default function OnboardingAdvancedScreen() {
     });
   };
 
+  // Funções de navegação e validação para a Etapa A3
+  const configuredSessionsCount = sessions.filter(s => s.exercises.length > 0).length;
+  const allSessionsConfigured = sessions.length > 0 && configuredSessionsCount === sessions.length;
+
+  const handleNextSession = () => {
+    Haptics.selectionAsync().catch(() => {});
+    if (activeSessionIndex < sessions.length - 1) {
+      setActiveSessionIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrevSession = () => {
+    Haptics.selectionAsync().catch(() => {});
+    if (activeSessionIndex > 0) {
+      setActiveSessionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleProceedToReview = () => {
+    const unconfigured = sessions.filter(s => s.exercises.length === 0);
+    if (unconfigured.length > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      Alert.alert(
+        'Exercícios Pendentes',
+        `Para prosseguir para o Resumo & Conclusão, configure ao menos um exercício para cada dia de treino.\n\nRestam ${unconfigured.length} sessão(ões) pendente(s):\n${unconfigured.map(s => `• ${s.name}`).join('\n')}`,
+        [
+          {
+            text: `Configurar "${unconfigured[0].name.split(' - ')[0]}"`,
+            onPress: () => {
+              const firstEmptyIndex = sessions.findIndex(s => s.exercises.length === 0);
+              if (firstEmptyIndex !== -1) {
+                setActiveSessionIndex(firstEmptyIndex);
+              }
+            },
+          },
+          { text: 'Entendi', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setCurrentStep(4);
+  };
+
   // ==========================================
   // PASSO A4: CONCLUSÃO & SALVAMENTO NO SQLITE
   // ==========================================
   const handleSaveAndGoToHub = () => {
+    const unconfigured = sessions.filter(s => s.exercises.length === 0);
+    if (unconfigured.length > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      Alert.alert(
+        'Rotinas Incompletas',
+        `Ainda existem ${unconfigured.length} dia(s) sem exercícios configurados. Complete todos os dias antes de salvar.`
+      );
+      return;
+    }
+
     // 1. Grava cada sessão como uma rotina no SQLite
     try {
       sessions.forEach((sess, sIdx) => {
@@ -461,27 +516,76 @@ export default function OnboardingAdvancedScreen() {
         {currentStep === 3 && (
           <View>
             <Text style={styles.stepDesc}>
-              Selecione a sessão ativa e adicione exercícios em lote filtrando por grupo e equipamento.
+              Selecione cada sessão para adicionar seus exercícios em lote. O resumo final só será liberado após todos os dias estarem definidos.
             </Text>
 
-            {/* Abas das Sessões */}
+            {/* Painel de Progresso das Rotinas */}
+            <View style={styles.sessionProgressBox}>
+              <View style={styles.sessionProgressHeader}>
+                <Text style={styles.sessionProgressLabel}>PROGRESSO DOS DIAS</Text>
+                <Text style={styles.sessionProgressRatio}>
+                  {configuredSessionsCount} de {sessions.length} configurados
+                </Text>
+              </View>
+              <View style={styles.sessionProgressBar}>
+                <View
+                  style={[
+                    styles.sessionProgressBarFill,
+                    {
+                      width: `${(configuredSessionsCount / (sessions.length || 1)) * 100}%`,
+                      backgroundColor: allSessionsConfigured ? '#22C55E' : Theme.colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* Abas das Sessões com Status de Conclusão */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sessionTabsScroll}>
               {sessions.map((s, sIdx) => {
                 const isTabActive = activeSessionIndex === sIdx;
+                const isConfigured = s.exercises.length > 0;
                 return (
                   <TouchableOpacity
                     key={s.id}
-                    style={[styles.sessionTab, isTabActive && styles.sessionTabActive]}
+                    style={[
+                      styles.sessionTab,
+                      isTabActive && styles.sessionTabActive,
+                      isConfigured && styles.sessionTabConfigured,
+                    ]}
                     onPress={() => {
                       setActiveSessionIndex(sIdx);
                       Haptics.selectionAsync().catch(() => {});
                     }}
                   >
-                    <Text style={[styles.sessionTabText, isTabActive && styles.sessionTabTextActive]}>
+                    {isConfigured ? (
+                      <Check size={12} color="#22C55E" style={{ marginRight: 2 }} />
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.sessionTabText,
+                        isTabActive && styles.sessionTabTextActive,
+                        isConfigured && styles.sessionTabTextConfigured,
+                      ]}
+                    >
                       {s.name.split(' - ')[0] || `Sessão ${sIdx + 1}`}
                     </Text>
-                    <View style={styles.sessionCountBadge}>
-                      <Text style={styles.sessionCountText}>{s.exercises.length}</Text>
+                    <View
+                      style={[
+                        styles.sessionCountBadge,
+                        isConfigured && styles.sessionCountBadgeConfigured,
+                        isTabActive && styles.sessionCountBadgeActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sessionCountText,
+                          isConfigured && styles.sessionCountTextConfigured,
+                          isTabActive && styles.sessionCountTextActive,
+                        ]}
+                      >
+                        {s.exercises.length}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -492,9 +596,20 @@ export default function OnboardingAdvancedScreen() {
             {sessions[activeSessionIndex] && (
               <View style={styles.activeSessionContainer}>
                 <View style={styles.activeSessionTitleRow}>
-                  <Text style={styles.activeSessionTitle} numberOfLines={1}>
-                    {sessions[activeSessionIndex].name}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activeSessionTitle} numberOfLines={1}>
+                      {sessions[activeSessionIndex].name}
+                    </Text>
+                    {sessions[activeSessionIndex].dayOfWeek ? (
+                      <Text style={styles.activeSessionSubtitle}>
+                        {sessions[activeSessionIndex].dayOfWeek} • {sessions[activeSessionIndex].exercises.length} exercício(s)
+                      </Text>
+                    ) : (
+                      <Text style={styles.activeSessionSubtitle}>
+                        {sessions[activeSessionIndex].exercises.length} exercício(s) definido(s)
+                      </Text>
+                    )}
+                  </View>
                   <TouchableOpacity
                     style={styles.addBatchBtn}
                     onPress={() => setModalBatchVisible(true)}
@@ -584,17 +699,61 @@ export default function OnboardingAdvancedScreen() {
               </View>
             )}
 
-            <TouchableOpacity 
-              style={[styles.actionBtn, { marginTop: 24 }]}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                setCurrentStep(4);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.actionBtnText}>Revisar e Finalizar</Text>
-              <ArrowRight size={18} color={Theme.colors.textInverse} />
-            </TouchableOpacity>
+            {/* Ações de Navegação Sequencial entre os Dias de Treino */}
+            <View style={styles.sessionNavActions}>
+              <View style={styles.sessionNavButtonsRow}>
+                {activeSessionIndex > 0 ? (
+                  <TouchableOpacity
+                    style={styles.navSessionPrevBtn}
+                    onPress={handlePrevSession}
+                    activeOpacity={0.8}
+                  >
+                    <ArrowLeft size={16} color={Theme.colors.text} />
+                    <Text style={styles.navSessionPrevText}>
+                      Dia Anterior
+                    </Text>
+                  </TouchableOpacity>
+                ) : <View style={{ flex: 1 }} />}
+
+                {activeSessionIndex < sessions.length - 1 ? (
+                  <TouchableOpacity
+                    style={styles.navSessionNextBtn}
+                    onPress={handleNextSession}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.navSessionNextText} numberOfLines={1}>
+                      Próximo: {sessions[activeSessionIndex + 1].name.split(' - ')[0] || `Sessão ${activeSessionIndex + 2}`}
+                    </Text>
+                    <ArrowRight size={16} color={Theme.colors.textInverse} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Botão de Revisão Final com Trava de Segurança */}
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  { marginTop: 14 },
+                  !allSessionsConfigured && styles.actionBtnPending,
+                ]}
+                onPress={handleProceedToReview}
+                activeOpacity={0.85}
+              >
+                {allSessionsConfigured ? (
+                  <>
+                    <Check size={18} color={Theme.colors.textInverse} />
+                    <Text style={styles.actionBtnText}>Revisar e Finalizar (Passo A4)</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.actionBtnTextPending}>
+                      Revisar e Finalizar ({sessions.length - configuredSessionsCount} dia(s) pendente(s))
+                    </Text>
+                    <ArrowRight size={16} color={Theme.colors.textMuted} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -888,6 +1047,9 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surfaceElevated,
     borderColor: Theme.colors.primary,
   },
+  sessionTabConfigured: {
+    borderColor: '#3F3F46',
+  },
   sessionTabText: {
     color: Theme.colors.textMuted,
     fontSize: 12,
@@ -896,17 +1058,32 @@ const styles = StyleSheet.create({
   sessionTabTextActive: {
     color: Theme.colors.text,
   },
+  sessionTabTextConfigured: {
+    color: Theme.colors.textSecondary,
+  },
   sessionCountBadge: {
     backgroundColor: '#09090B',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
   },
+  sessionCountBadgeActive: {
+    backgroundColor: '#09090B',
+  },
+  sessionCountBadgeConfigured: {
+    backgroundColor: '#052E16',
+  },
   sessionCountText: {
     color: Theme.colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
+  },
+  sessionCountTextActive: {
+    color: Theme.colors.primary,
+  },
+  sessionCountTextConfigured: {
+    color: '#22C55E',
   },
   activeSessionContainer: {
     backgroundColor: '#121215',
@@ -924,10 +1101,102 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   activeSessionTitle: {
-    flex: 1,
     color: Theme.colors.text,
     fontSize: 16,
     fontWeight: '800',
+  },
+  activeSessionSubtitle: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  sessionProgressBox: {
+    backgroundColor: '#121215',
+    borderRadius: Theme.borderRadius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: 14,
+  },
+  sessionProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sessionProgressLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  sessionProgressRatio: {
+    color: Theme.colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  sessionProgressBar: {
+    height: 4,
+    backgroundColor: '#09090B',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  sessionProgressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  sessionNavActions: {
+    marginTop: 10,
+  },
+  sessionNavButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  navSessionPrevBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#18181B',
+    height: 46,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    gap: 6,
+  },
+  navSessionPrevText: {
+    color: Theme.colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  navSessionNextBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.primary,
+    height: 46,
+    borderRadius: Theme.borderRadius.md,
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  navSessionNextText: {
+    color: Theme.colors.textInverse,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  actionBtnPending: {
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  actionBtnTextPending: {
+    color: Theme.colors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
   },
   addBatchBtn: {
     flexDirection: 'row',
