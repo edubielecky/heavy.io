@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   ScrollView, 
   TextInput,
-  Alert 
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -29,6 +30,7 @@ import Theme from '../src/theme/theme';
 import { Exercise } from '../src/types/workout';
 import { createProgram, setActiveProgram } from '../src/database/database';
 import { useUserStore } from '../src/store/userStore';
+import { useWorkoutStore } from '../src/store/workoutStore';
 import { BatchExerciseModal } from '../src/components/BatchExerciseModal';
 
 // Interfaces de apoio para o assistente de montagem da Trilha A
@@ -129,6 +131,7 @@ export default function OnboardingAdvancedScreen() {
 
   // Etapa atual do wizard: 1, 2, 3 ou 4
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Estado da divisão e sessões
   const [selectedPreset, setSelectedPreset] = useState<SplitPresetType>('ppl');
@@ -293,6 +296,8 @@ export default function OnboardingAdvancedScreen() {
   // PASSO A4: CONCLUSÃO & SALVAMENTO NO SQLITE
   // ==========================================
   const handleSaveAndGoToHub = () => {
+    if (isSaving) return;
+
     const unconfigured = sessions.filter(s => s.exercises.length === 0);
     if (unconfigured.length > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -303,6 +308,8 @@ export default function OnboardingAdvancedScreen() {
       return;
     }
 
+    setIsSaving(true);
+
     try {
       // 1. Cria um NOVO programa isolado com as sessões configuradas
       const createdProg = createProgram(
@@ -311,8 +318,10 @@ export default function OnboardingAdvancedScreen() {
         sessions.map(sess => ({
           name: sess.name,
           description: sess.dayOfWeek ? `Dia sugerido: ${sess.dayOfWeek}` : undefined,
-          exercises: sess.exercises.map((ex, exIdx) => ({
+          exercises: sess.exercises.map(ex => ({
             exerciseId: ex.exerciseId,
+            exerciseName: ex.exerciseName,
+            targetMuscle: ex.targetMuscle,
             targetSets: ex.targetSets,
             targetRepsMin: ex.targetRepsMin,
             targetRepsMax: ex.targetRepsMax,
@@ -322,22 +331,28 @@ export default function OnboardingAdvancedScreen() {
       );
 
       // Ativa o novo programa recém-criado, desativando os anteriores
-      setActiveProgram(createdProg.id);
+      if (createdProg?.id) {
+        setActiveProgram(createdProg.id);
+      }
 
       // 2. Marca onboarding como concluído na store
       completeOnboarding({
         onboardingTrack: 'advanced',
       });
 
+      // 3. Força atualização imediata da store de treinos
+      try {
+        useWorkoutStore.getState().loadFromDatabase();
+      } catch (storeErr) {
+        console.warn('Erro ao sincronizar workoutStore com o banco:', storeErr);
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert(
-        'Rotinas Salvas!',
-        'Sua estrutura de treinos foi gravada com sucesso no SQLite local do heavy.io.',
-        [
-          { text: 'Acessar Hub', onPress: () => router.replace('/(tabs)' as any) }
-        ]
-      );
+
+      // 4. Redirecionamento DIRETO para o Hub de Treinos sem bloqueio de alert
+      router.replace('/(tabs)' as any);
     } catch (err) {
+      setIsSaving(false);
       console.error('Erro ao salvar rotinas da Trilha A:', err);
       Alert.alert('Erro', 'Houve uma falha ao salvar as rotinas no banco local.');
     }
@@ -791,12 +806,19 @@ export default function OnboardingAdvancedScreen() {
             </View>
 
             <TouchableOpacity 
-              style={styles.actionBtn}
+              style={[styles.actionBtn, isSaving && { opacity: 0.7 }]}
               onPress={handleSaveAndGoToHub}
+              disabled={isSaving}
               activeOpacity={0.85}
             >
-              <Check size={18} color={Theme.colors.textInverse} />
-              <Text style={styles.actionBtnText}>Salvar e Ir para o Hub de Treinos</Text>
+              {isSaving ? (
+                <ActivityIndicator size="small" color={Theme.colors.textInverse} />
+              ) : (
+                <>
+                  <Check size={18} color={Theme.colors.textInverse} />
+                  <Text style={styles.actionBtnText}>Salvar e Ir para o Hub de Treinos</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         )}

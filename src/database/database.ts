@@ -519,9 +519,9 @@ export const getPrograms = (): WorkoutProgram[] => {
 
     const routines: Routine[] = routinesRows.map(r => {
       const exRows = db.getAllSync<any>(
-        `SELECT re.*, e.name as exercise_name, e.target_muscle 
+        `SELECT re.*, COALESCE(e.name, re.exercise_id) as exercise_name, COALESCE(e.target_muscle, 'peito') as target_muscle 
          FROM routine_exercises re
-         JOIN exercises e ON re.exercise_id = e.id
+         LEFT JOIN exercises e ON re.exercise_id = e.id
          WHERE re.routine_id = ?
          ORDER BY re.order_index ASC;`,
         [r.id]
@@ -579,7 +579,7 @@ export const getActiveProgram = (): WorkoutProgram | null => {
 
 export const setActiveProgram = (programId: string): void => {
   if ((Platform.OS as string) === 'web') {
-    return WebDB.setActiveProgram(programId); return;;
+    return WebDB.setActiveProgram(programId);
   }
   const db = getDatabase();
   db.withTransactionSync(() => {
@@ -778,9 +778,9 @@ export const getRoutines = (): Routine[] => {
 
   return routinesRows.map(r => {
     const exRows = db.getAllSync<any>(
-      `SELECT re.*, e.name as exercise_name, e.target_muscle 
+      `SELECT re.*, COALESCE(e.name, re.exercise_id) as exercise_name, COALESCE(e.target_muscle, 'peito') as target_muscle 
        FROM routine_exercises re
-       JOIN exercises e ON re.exercise_id = e.id
+       LEFT JOIN exercises e ON re.exercise_id = e.id
        WHERE re.routine_id = ?
        ORDER BY re.order_index ASC;`,
       [r.id]
