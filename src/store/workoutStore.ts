@@ -203,7 +203,7 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
           for (let sIdx = 1; sIdx <= numSets; sIdx++) {
             const ghostSet = lastPerf?.sets?.[sIdx - 1];
             const initialWeight = ghostSet ? ghostSet.weightKg : (lastPerf?.bestWeightKg || 0);
-            const initialReps = ghostSet ? ghostSet.reps : (re.targetRepsMin || 10);
+            const initialReps = ghostSet ? ghostSet.reps : (re.targetRepsMin || 8);
 
             sets.push({
               id: `set_${Date.now()}_${exIdx}_${sIdx}`,
@@ -334,23 +334,40 @@ export const useWorkoutStore = create<WorkoutStoreState>()(
         if (!currentWorkout) return;
 
         const newWorkoutExerciseId = `we_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-        const initialSetId = `set_${Date.now()}_1`;
+
+        // Busca dados da última vez que o exercício foi executado (treino anterior)
+        let lastPerf: any = null;
+        try {
+          lastPerf = getLastExercisePerformance(exercise.id);
+        } catch (e) {
+          console.error('Erro ao buscar histórico do exercício ao adicionar:', e);
+        }
+
+        const numSets = Math.max(1, lastPerf?.sets?.length || 1);
+        const sets: WorkoutSet[] = [];
+
+        for (let sIdx = 1; sIdx <= numSets; sIdx++) {
+          const ghostSet = lastPerf?.sets?.[sIdx - 1];
+          const initialWeight = ghostSet ? ghostSet.weightKg : (lastPerf?.bestWeightKg || 0);
+
+          sets.push({
+            id: `set_${Date.now()}_${sIdx}`,
+            setNumber: sIdx,
+            type: (ghostSet?.type as SetType) || 'normal',
+            weightKg: initialWeight,
+            reps: 0,
+            rpe: ghostSet?.rpe,
+            rir: ghostSet?.rir,
+            completed: false,
+          });
+        }
 
         const newWorkoutExercise: WorkoutExercise = {
           id: newWorkoutExerciseId,
           exerciseId: exercise.id,
           exerciseName: exercise.name,
           targetMuscle: exercise.targetMuscle,
-          sets: [
-            {
-              id: initialSetId,
-              setNumber: 1,
-              type: 'normal',
-              weightKg: 0,
-              reps: 0,
-              completed: false,
-            },
-          ],
+          sets,
         };
 
         const updatedSession: WorkoutSession = {

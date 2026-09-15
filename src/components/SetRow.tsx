@@ -28,12 +28,12 @@ export const SetRow: React.FC<SetRowProps> = ({
   onToggleComplete,
   onDelete,
 }) => {
-  // Determina se as repetições atuais são apenas a sugestão inicial padrão
+  // Determina se as repetições atuais são apenas a sugestão inicial padrão (ex: 8 repetições)
   const isSuggestedGhostReps = !set.completed && (
     set.reps === 0 || 
-    set.reps === targetRepsMin || 
     set.reps === previousReps ||
-    (set.reps === 10 && !targetRepsMin && !previousReps)
+    set.reps === targetRepsMin || 
+    (set.reps === 8 && !targetRepsMin && !previousReps)
   );
 
   // Estado local para digitação fluida sem interrupções de render/parsing
@@ -58,8 +58,8 @@ export const SetRow: React.FC<SetRowProps> = ({
   }, [set.weightKg]);
 
   useEffect(() => {
-    // Se a série não estiver completada e for igual à sugestão, mantém o campo vazio para o placeholder apagado
-    if (!set.completed && (set.reps === 0 || set.reps === targetRepsMin || set.reps === previousReps)) {
+    // Se a série não estiver completada e for igual à sugestão inicial (0, 8, meta ou anterior), mantém o campo vazio para exibir o placeholder
+    if (!set.completed && (set.reps === 0 || set.reps === targetRepsMin || set.reps === previousReps || set.reps === 8)) {
       if (repsText === '') return;
     }
     const formatted = set.reps === 0 ? '' : String(set.reps);
@@ -166,7 +166,7 @@ export const SetRow: React.FC<SetRowProps> = ({
       if (set.reps === 0 || repsText === '') {
         const fallbackReps = (previousReps && previousReps > 0)
           ? previousReps
-          : (targetRepsMin || 10);
+          : (targetRepsMin || 8);
         updates.reps = fallbackReps;
         setRepsText(String(fallbackReps));
       }
@@ -179,16 +179,17 @@ export const SetRow: React.FC<SetRowProps> = ({
     onToggleComplete();
   };
 
-  // Placeholders contextuais inteligentes
-  const weightPlaceholder = previousWeight && previousWeight > 0 
+  // Placeholders contextuais inteligentes:
+  // Inicialmente 0 (kg) e 8 (reps), ou baseados no treino anterior se houver
+  const weightPlaceholder = previousWeight !== undefined && previousWeight > 0 
     ? String(previousWeight) 
     : '0';
 
-  const repsPlaceholder = previousReps && previousReps > 0 
+  const repsPlaceholder = previousReps !== undefined && previousReps > 0 
     ? String(previousReps) 
     : targetRepsMin 
       ? String(targetRepsMin) 
-      : '10';
+      : '8';
 
   return (
     <View style={[styles.row, set.completed && styles.rowCompleted]}>

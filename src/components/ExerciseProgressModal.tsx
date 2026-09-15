@@ -316,19 +316,35 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
                   </View>
                 )}
 
-                {/* Histórico Cronológico de Sessões */}
-                <Text style={styles.historySubHeading}>Registros Cronológicos:</Text>
+                {/* Histórico Cronológico de Sessões com Séries Detalhadas */}
+                <Text style={styles.historySubHeading}>Registros Cronológicos Detalhados:</Text>
                 <View style={styles.historyList}>
                   {history.slice().reverse().map((pt, idx) => (
-                    <View key={pt.sessionId || idx} style={styles.historyRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.historyRowSessionName}>{pt.sessionName}</Text>
-                        <Text style={styles.historyRowDate}>{formatDate(pt.date)} • {pt.totalSets} séries</Text>
+                    <View key={pt.sessionId || idx} style={styles.historyCardItem}>
+                      <View style={styles.historyItemTop}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.historyRowSessionName}>{pt.sessionName}</Text>
+                          <Text style={styles.historyRowDate}>{formatDate(pt.date)} • {pt.totalSets} {pt.totalSets === 1 ? 'série' : 'séries'}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.historyRowWeight}>Máx: {pt.maxWeightKg} kg</Text>
+                          <Text style={styles.historyRow1RM}>1RM: {pt.estimated1RM}kg</Text>
+                        </View>
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.historyRowWeight}>{pt.maxWeightKg} kg</Text>
-                        <Text style={styles.historyRow1RM}>1RM: {pt.estimated1RM}kg</Text>
-                      </View>
+
+                      {/* Grade de Séries com Carga e Reps */}
+                      {pt.sets && pt.sets.length > 0 && (
+                        <View style={styles.setsDetailGrid}>
+                          {pt.sets.map((s, sIdx) => (
+                            <View key={sIdx} style={styles.setDetailPill}>
+                              <Text style={styles.setDetailNumber}>#{s.setNumber}</Text>
+                              <Text style={styles.setDetailContent}>
+                                {s.weightKg} kg × {s.reps}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -529,15 +545,20 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   historyList: {
-    gap: 8,
+    gap: 10,
   },
-  historyRow: {
+  historyCardItem: {
+    backgroundColor: '#09090B',
+    borderRadius: Theme.borderRadius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  historyItemTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    marginBottom: 8,
   },
   historyRowSessionName: {
     color: Theme.colors.text,
@@ -551,13 +572,43 @@ const styles = StyleSheet.create({
   },
   historyRowWeight: {
     color: Theme.colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   historyRow1RM: {
     color: Theme.colors.textSecondary,
     fontSize: 10,
+    fontVariant: ['tabular-nums'],
+  },
+  setsDetailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  setDetailPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#18181B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  setDetailNumber: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  setDetailContent: {
+    color: Theme.colors.text,
+    fontSize: 11,
+    fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   emptyProgressCard: {

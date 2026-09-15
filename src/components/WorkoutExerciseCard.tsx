@@ -193,7 +193,13 @@ export const WorkoutExerciseCard: React.FC<WorkoutExerciseCardProps> = ({
 
       {/* Lista de Séries */}
       {workoutExercise.sets.map((set, index) => {
-        const prevSet = lastPerformance?.sets[index];
+        // Se houver série correspondente no treino anterior, usa-a.
+        // Se for uma série adicional (ex: 4ª série), herda da última série válida do treino anterior
+        const prevSet = lastPerformance?.sets?.[index] ?? (
+          lastPerformance?.sets && lastPerformance.sets.length > 0 
+            ? lastPerformance.sets[lastPerformance.sets.length - 1] 
+            : undefined
+        );
         const prevString = prevSet ? `${prevSet.weightKg}k × ${prevSet.reps}` : undefined;
 
         return (
