@@ -536,7 +536,11 @@ Retorne ESTRITAMENTE um objeto JSON válido (sem tags de código markdown, sem c
     throw new Error('Gemini retornou resposta vazia.');
   }
 
-  const parsed = JSON.parse(rawText);
+  let cleanText = rawText.trim();
+  if (cleanText.startsWith('```')) {
+    cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  }
+  const parsed = JSON.parse(cleanText);
 
   // Mescla a inteligência do LLM com os dados cinemáticos exatos do motor local
   return {

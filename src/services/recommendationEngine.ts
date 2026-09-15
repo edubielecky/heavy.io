@@ -241,7 +241,8 @@ function getDeterministicProfileSeed(inputs: GuidedInputs): number {
   const priorityFactor = (inputs.musclePriority?.length || 5) * 41;
   const freqFactor = inputs.frequency * 17;
 
-  return Math.abs(sexFactor + ageFactor + weightFactor + heightFactor + priorityFactor + freqFactor);
+  // Adiciona entropia com Date.now() para que o fallback gere exercícios diferentes a cada tentativa
+  return Math.abs(sexFactor + ageFactor + weightFactor + heightFactor + priorityFactor + freqFactor) + Date.now();
 }
 
 /**
@@ -1302,7 +1303,11 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
       throw new Error('Gemini retornou resposta vazia.');
     }
 
-    const parsed = JSON.parse(rawText);
+    let cleanText = rawText.trim();
+    if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    }
+    const parsed = JSON.parse(cleanText);
     if (!parsed || !Array.isArray(parsed.sessions) || parsed.sessions.length === 0) {
       throw new Error('Sessões inválidas no retorno da IA.');
     }
