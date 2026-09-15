@@ -31,6 +31,7 @@ import { WorkoutSession, Exercise } from '../../src/types/workout';
 import { WorkoutDetailModal } from '../../src/components/WorkoutDetailModal';
 import { ExerciseProgressModal } from '../../src/components/ExerciseProgressModal';
 import { getSessionPRs, getExerciseById } from '../../src/database/database';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import Theme from '../../src/theme/theme';
 
 interface ExerciseExecutionHistory {
@@ -57,6 +58,7 @@ interface ExerciseExecutionHistory {
 }
 
 export default function HistoryScreen() {
+  const { isFoldable, maxContentWidth, numColumns, modalMaxWidth } = useResponsive();
   const { workoutHistory, loadFromDatabase, deleteWorkoutFromHistory } = useWorkoutStore();
   
   // Alternador de Visualização: 'sessions' (por treino) ou 'exercises' (detalhado por exercício)
@@ -218,7 +220,7 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <View style={[styles.container, isFoldable && { maxWidth: maxContentWidth, alignSelf: 'center' }]}>
         {/* Header Superior Minimalista */}
         <View style={styles.header}>
           <Text style={styles.title}>Histórico de Treinos</Text>
@@ -279,8 +281,11 @@ export default function HistoryScreen() {
         {/* VISÃO 1: LISTA POR TREINO (SESSÕES) */}
         {viewMode === 'sessions' && (
           <FlatList
+            key={isFoldable ? 'sess-grid-2' : 'sess-list-1'}
             data={workoutHistory}
             keyExtractor={(item) => item.id}
+            numColumns={numColumns}
+            columnWrapperStyle={isFoldable ? styles.columnWrapper : undefined}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => {
@@ -291,7 +296,7 @@ export default function HistoryScreen() {
 
               return (
                 <TouchableOpacity
-                  style={styles.historyCard}
+                  style={[styles.historyCard, isFoldable && styles.historyCardGrid]}
                   onPress={() => handleOpenDetail(item)}
                   activeOpacity={0.8}
                 >
@@ -558,13 +563,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 14,
+    width: '100%',
   },
   header: {
     marginBottom: 14,
@@ -599,27 +603,25 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.border,
   },
   overviewValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: Theme.colors.text,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
   },
   overviewLabel: {
     fontSize: 10,
     color: Theme.colors.textMuted,
-    fontWeight: '600',
     marginTop: 2,
-    textAlign: 'center',
+    fontWeight: '600',
   },
   tabSelector: {
     flexDirection: 'row',
-    backgroundColor: '#121215',
-    borderRadius: Theme.borderRadius.md,
-    padding: 4,
+    backgroundColor: '#18181B',
+    borderRadius: 8,
+    padding: 3,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    gap: 4,
   },
   tabBtn: {
     flex: 1,
@@ -661,6 +663,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 40,
   },
+  columnWrapper: {
+    gap: 12,
+  },
   historyCard: {
     backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.lg,
@@ -668,6 +673,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: Theme.colors.border,
+  },
+  historyCardGrid: {
+    flex: 1,
+    marginBottom: 12,
   },
   cardTop: {
     flexDirection: 'row',

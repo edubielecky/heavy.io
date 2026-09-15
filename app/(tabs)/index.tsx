@@ -32,10 +32,12 @@ import { WorkoutExerciseCard } from '../../src/components/WorkoutExerciseCard';
 import { WorkoutSummaryModal } from '../../src/components/WorkoutSummaryModal';
 import { getActiveProgram, getRoutines, getSessionPRs } from '../../src/database/database';
 import { useWorkoutStore } from '../../src/store/workoutStore';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import Theme from '../../src/theme/theme';
 import { PersonalRecord, Routine, WorkoutProgram, WorkoutSession } from '../../src/types/workout';
 
 export default function WorkoutScreen() {
+  const { isFoldable, maxContentWidth, modalMaxWidth } = useResponsive();
   const {
     currentWorkout,
     isSessionActiveInForeground,
@@ -225,7 +227,14 @@ export default function WorkoutScreen() {
 
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isFoldable && { maxWidth: maxContentWidth, alignSelf: 'center' },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Header Superior Minimalista */}
           <View style={styles.topBar}>
             <View>
@@ -297,134 +306,264 @@ export default function WorkoutScreen() {
           </View>
 
           {/* ===================================================== */}
-          {/* DETECÇÃO DE TREINO DO DIA (HERO CARD)                 */}
+          {/* SESSÕES E TREINO DO DIA (ADAPTÁVEL 2 COLUNAS EM FOLD) */}
           {/* ===================================================== */}
-          {routineOfTheDay && (
-            <View style={styles.heroCard}>
-              <View style={styles.heroHeader}>
-                <View style={styles.heroBadgeRow}>
+          {isFoldable && otherRoutines.length > 0 ? (
+            <View style={styles.foldableRow}>
+              {/* Coluna 1: Treino do Dia em Destaque + Treino Livre */}
+              <View style={styles.foldableCol}>
+                {routineOfTheDay && (
+                  <View style={styles.heroCard}>
+                    <View style={styles.heroHeader}>
+                      <View style={styles.heroBadgeRow}>
+                        <TouchableOpacity
+                          style={styles.programChipBtn}
+                          onPress={() => setIsRoutineManagerOpen(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Layers size={10} color={Theme.colors.primary} />
+                          <Text style={styles.programChipText} numberOfLines={1}>
+                            {activeProgram?.name || 'Ficha Ativa'}
+                          </Text>
+                        </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.programChipBtn}
-                    onPress={() => setIsRoutineManagerOpen(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Layers size={10} color={Theme.colors.primary} />
-                    <Text style={styles.programChipText} numberOfLines={1}>
-                      {activeProgram?.name || 'Ficha Ativa'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <Text style={styles.heroBadgeCount}>
-                    {routineOfTheDay.exercises.length} EXERCÍCIOS
-                  </Text>
-                </View>
-
-                <Text style={styles.heroTitle} numberOfLines={2}>
-                  {routineOfTheDay.name}
-                </Text>
-
-                {routineOfTheDay.description && (
-                  <Text style={styles.heroDesc} numberOfLines={2}>
-                    {routineOfTheDay.description}
-                  </Text>
-                )}
-              </View>
-
-              {/* Prévia da Lista de Exercícios */}
-              <View style={styles.heroExercisesPreview}>
-                <Text style={styles.heroPreviewHeading}>EXERCÍCIOS ESCALADOS:</Text>
-                <Text style={styles.heroPreviewText} numberOfLines={2}>
-                  {routineOfTheDay.exercises.map(e => e.exerciseName).join(' • ')}
-                </Text>
-              </View>
-
-              {/* Botão de Início da Sessão Programada */}
-              <TouchableOpacity
-                style={styles.heroStartBtn}
-                onPress={() => startWorkoutFromRoutine(routineOfTheDay)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.heroPlayCircle}>
-                  <Play size={20} color={Theme.colors.textInverse} fill={Theme.colors.textInverse} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.heroStartBtnTitle}>Iniciar Treino</Text>
-                  <Text style={styles.heroStartBtnSub}>Carrega cargas anteriores automaticamente</Text>
-                </View>
-                <ChevronRight size={18} color={Theme.colors.textInverse} />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ===================================================== */}
-          {/* OUTRAS SESSÕES DA GRADE                              */}
-          {/* ===================================================== */}
-          {otherRoutines.length > 0 && (
-            <View style={styles.otherSection}>
-              <View style={styles.sectionHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                  <Layers size={15} color={Theme.colors.textSecondary} />
-                  <Text style={styles.sectionTitle}>Sessões da Grade</Text>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <TouchableOpacity
-                    style={styles.newRoutineHeaderBtn}
-                    onPress={() => setIsRoutineManagerOpen(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Plus size={12} color={Theme.colors.textInverse} />
-                    <Text style={styles.newRoutineHeaderBtnText}>Nova Ficha</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.manageRoutinesHeaderBtn}
-                    onPress={() => setIsRoutineManagerOpen(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.manageRoutinesHeaderBtnText}>Fichas</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {otherRoutines.map((routine, idx) => (
-                <TouchableOpacity
-                  key={routine.id}
-                  style={styles.routineCard}
-                  onPress={() => startWorkoutFromRoutine(routine)}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.routineCardLeft}>
-                    <View style={styles.routineCardHeader}>
-                      <Text style={styles.routineCardName}>{routine.name}</Text>
-                      <View style={[styles.routineBadge, idx === 0 && { borderColor: Theme.colors.borderLight }]}>
-                        <Text style={[styles.routineBadgeText, idx === 0 && { color: Theme.colors.text }]}>
-                          {idx === 0 ? 'PRÓXIMO NO CICLO' : `${routine.exercises.length} EX`}
+                        <Text style={styles.heroBadgeCount}>
+                          {routineOfTheDay.exercises.length} EXERCÍCIOS
                         </Text>
                       </View>
+
+                      <Text style={styles.heroTitle} numberOfLines={2}>
+                        {routineOfTheDay.name}
+                      </Text>
+
+                      {routineOfTheDay.description && (
+                        <Text style={styles.heroDesc} numberOfLines={2}>
+                          {routineOfTheDay.description}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={styles.routineCardExercises} numberOfLines={1}>
-                      {routine.exercises.map(e => e.exerciseName).join(' • ')}
+
+                    {/* Prévia da Lista de Exercícios */}
+                    <View style={styles.heroExercisesPreview}>
+                      <Text style={styles.heroPreviewHeading}>EXERCÍCIOS ESCALADOS:</Text>
+                      <Text style={styles.heroPreviewText} numberOfLines={2}>
+                        {routineOfTheDay.exercises.map(e => e.exerciseName).join(' • ')}
+                      </Text>
+                    </View>
+
+                    {/* Botão de Início da Sessão Programada */}
+                    <TouchableOpacity
+                      style={styles.heroStartBtn}
+                      onPress={() => startWorkoutFromRoutine(routineOfTheDay)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.heroPlayCircle}>
+                        <Play size={20} color={Theme.colors.textInverse} fill={Theme.colors.textInverse} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.heroStartBtnTitle}>Iniciar Treino</Text>
+                        <Text style={styles.heroStartBtnSub}>Carrega cargas anteriores automaticamente</Text>
+                      </View>
+                      <ChevronRight size={18} color={Theme.colors.textInverse} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Iniciar Treino Vazio / Avulso */}
+                <TouchableOpacity
+                  style={styles.blankStartBtn}
+                  onPress={() => startWorkout('Treino Livre de Força')}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={16} color={Theme.colors.textSecondary} />
+                  <Text style={styles.blankStartText}>Iniciar Treino Livre / Avulso</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Coluna 2: Outras Sessões da Grade */}
+              <View style={styles.foldableCol}>
+                <View style={styles.otherSection}>
+                  <View style={styles.sectionHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Layers size={15} color={Theme.colors.textSecondary} />
+                      <Text style={styles.sectionTitle}>Sessões da Grade</Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={styles.newRoutineHeaderBtn}
+                        onPress={() => setIsRoutineManagerOpen(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Plus size={12} color={Theme.colors.textInverse} />
+                        <Text style={styles.newRoutineHeaderBtnText}>Nova Ficha</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.manageRoutinesHeaderBtn}
+                        onPress={() => setIsRoutineManagerOpen(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.manageRoutinesHeaderBtnText}>Fichas</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {otherRoutines.map((routine, idx) => (
+                    <TouchableOpacity
+                      key={routine.id}
+                      style={styles.routineCard}
+                      onPress={() => startWorkoutFromRoutine(routine)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.routineCardLeft}>
+                        <View style={styles.routineCardHeader}>
+                          <Text style={styles.routineCardName}>{routine.name}</Text>
+                          <View style={[styles.routineBadge, idx === 0 && { borderColor: Theme.colors.borderLight }]}>
+                            <Text style={[styles.routineBadgeText, idx === 0 && { color: Theme.colors.text }]}>
+                              {idx === 0 ? 'PRÓXIMO NO CICLO' : `${routine.exercises.length} EX`}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.routineCardExercises} numberOfLines={1}>
+                          {routine.exercises.map(e => e.exerciseName).join(' • ')}
+                        </Text>
+                      </View>
+                      <View style={styles.routineStartAction}>
+                        <Play size={14} color={Theme.colors.text} fill={Theme.colors.text} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <>
+              {routineOfTheDay && (
+                <View style={styles.heroCard}>
+                  <View style={styles.heroHeader}>
+                    <View style={styles.heroBadgeRow}>
+                      <TouchableOpacity
+                        style={styles.programChipBtn}
+                        onPress={() => setIsRoutineManagerOpen(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Layers size={10} color={Theme.colors.primary} />
+                        <Text style={styles.programChipText} numberOfLines={1}>
+                          {activeProgram?.name || 'Ficha Ativa'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <Text style={styles.heroBadgeCount}>
+                        {routineOfTheDay.exercises.length} EXERCÍCIOS
+                      </Text>
+                    </View>
+
+                    <Text style={styles.heroTitle} numberOfLines={2}>
+                      {routineOfTheDay.name}
+                    </Text>
+
+                    {routineOfTheDay.description && (
+                      <Text style={styles.heroDesc} numberOfLines={2}>
+                        {routineOfTheDay.description}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Prévia da Lista de Exercícios */}
+                  <View style={styles.heroExercisesPreview}>
+                    <Text style={styles.heroPreviewHeading}>EXERCÍCIOS ESCALADOS:</Text>
+                    <Text style={styles.heroPreviewText} numberOfLines={2}>
+                      {routineOfTheDay.exercises.map(e => e.exerciseName).join(' • ')}
                     </Text>
                   </View>
-                  <View style={styles.routineStartAction}>
-                    <Play size={14} color={Theme.colors.text} fill={Theme.colors.text} />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
 
-          {/* Iniciar Treino Vazio / Avulso */}
-          <TouchableOpacity
-            style={styles.blankStartBtn}
-            onPress={() => startWorkout('Treino Livre de Força')}
-            activeOpacity={0.8}
-          >
-            <Plus size={16} color={Theme.colors.textSecondary} />
-            <Text style={styles.blankStartText}>Iniciar Treino Livre / Avulso</Text>
-          </TouchableOpacity>
+                  {/* Botão de Início da Sessão Programada */}
+                  <TouchableOpacity
+                    style={styles.heroStartBtn}
+                    onPress={() => startWorkoutFromRoutine(routineOfTheDay)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.heroPlayCircle}>
+                      <Play size={20} color={Theme.colors.textInverse} fill={Theme.colors.textInverse} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.heroStartBtnTitle}>Iniciar Treino</Text>
+                      <Text style={styles.heroStartBtnSub}>Carrega cargas anteriores automaticamente</Text>
+                    </View>
+                    <ChevronRight size={18} color={Theme.colors.textInverse} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* OUTRAS SESSÕES DA GRADE */}
+              {otherRoutines.length > 0 && (
+                <View style={styles.otherSection}>
+                  <View style={styles.sectionHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Layers size={15} color={Theme.colors.textSecondary} />
+                      <Text style={styles.sectionTitle}>Sessões da Grade</Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={styles.newRoutineHeaderBtn}
+                        onPress={() => setIsRoutineManagerOpen(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Plus size={12} color={Theme.colors.textInverse} />
+                        <Text style={styles.newRoutineHeaderBtnText}>Nova Ficha</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.manageRoutinesHeaderBtn}
+                        onPress={() => setIsRoutineManagerOpen(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.manageRoutinesHeaderBtnText}>Fichas</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {otherRoutines.map((routine, idx) => (
+                    <TouchableOpacity
+                      key={routine.id}
+                      style={styles.routineCard}
+                      onPress={() => startWorkoutFromRoutine(routine)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.routineCardLeft}>
+                        <View style={styles.routineCardHeader}>
+                          <Text style={styles.routineCardName}>{routine.name}</Text>
+                          <View style={[styles.routineBadge, idx === 0 && { borderColor: Theme.colors.borderLight }]}>
+                            <Text style={[styles.routineBadgeText, idx === 0 && { color: Theme.colors.text }]}>
+                              {idx === 0 ? 'PRÓXIMO NO CICLO' : `${routine.exercises.length} EX`}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.routineCardExercises} numberOfLines={1}>
+                          {routine.exercises.map(e => e.exerciseName).join(' • ')}
+                        </Text>
+                      </View>
+                      <View style={styles.routineStartAction}>
+                        <Play size={14} color={Theme.colors.text} fill={Theme.colors.text} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Iniciar Treino Vazio / Avulso */}
+              <TouchableOpacity
+                style={styles.blankStartBtn}
+                onPress={() => startWorkout('Treino Livre de Força')}
+                activeOpacity={0.8}
+              >
+                <Plus size={16} color={Theme.colors.textSecondary} />
+                <Text style={styles.blankStartText}>Iniciar Treino Livre / Avulso</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
 
         {/* Modal de Conclusão de Treino */}
@@ -467,7 +606,7 @@ export default function WorkoutScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.activeContainer}>
+      <View style={[styles.activeContainer, isFoldable && { maxWidth: maxContentWidth, alignSelf: 'center' }]}>
         {/* Active Header */}
         <View style={styles.activeHeader}>
           <View style={{ flex: 1, marginRight: 10 }}>
@@ -598,8 +737,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,
@@ -609,8 +746,16 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 60,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
+  },
+  foldableRow: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  foldableCol: {
+    flex: 1,
+    minWidth: 0,
   },
   topBar: {
     flexDirection: 'row',
@@ -927,8 +1072,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   activeHeader: {
     flexDirection: 'row',

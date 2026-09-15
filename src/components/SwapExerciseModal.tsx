@@ -23,6 +23,7 @@ import {
   AiBiomechanicSubstituteResult,
 } from '../services/recommendationEngine';
 import { useUserStore } from '../store/userStore';
+import { useResponsive } from '../hooks/useResponsive';
 
 export interface SwapExerciseTarget {
   exerciseId: string;
@@ -44,6 +45,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
   guidedInputs,
   onSelectSubstitute,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   const [searchTerm, setSearchTerm] = useState('');
   const [equipmentFilter, setEquipmentFilter] = useState<Equipment | 'all'>('all');
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -118,8 +120,8 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
+      <SafeAreaView style={[styles.modalOverlay, isFoldable && styles.overlayFoldable]}>
+        <View style={[styles.modalContainer, isFoldable && { maxWidth: modalMaxWidth, borderRadius: 16, borderLeftWidth: 1, borderRightWidth: 1 }]}>
           {/* Top Bar */}
           <View style={styles.modalHeader}>
             <View style={styles.titleArea}>
@@ -373,11 +375,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
+  overlayFoldable: {
+    justifyContent: 'center',
+    padding: 24,
+  },
   modalContainer: {
     flex: 1,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

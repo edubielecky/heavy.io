@@ -54,6 +54,7 @@ import { AddExerciseModal } from './AddExerciseModal';
 import { BatchExerciseModal } from './BatchExerciseModal';
 import { WorkoutAuditModal } from './WorkoutAuditModal';
 import { AuditAction } from '../services/aiWorkoutService';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface RoutineManagementModalProps {
   visible: boolean;
@@ -67,6 +68,7 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
   onProgramsUpdated,
 }) => {
   const router = useRouter();
+  const { isFoldable, modalMaxWidth } = useResponsive();
 
   // Estado das fichas carregadas
   const [programs, setPrograms] = useState<WorkoutProgram[]>([]);
@@ -452,7 +454,7 @@ export const RoutineManagementModal: React.FC<RoutineManagementModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, isFoldable && { maxWidth: modalMaxWidth, alignSelf: 'center' }]}>
         {/* ======================================================== */}
         {/* CABEÇALHO DO MODAL                                       */}
         {/* ======================================================== */}
@@ -1214,8 +1216,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.background,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

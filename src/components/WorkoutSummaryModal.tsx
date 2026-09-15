@@ -23,6 +23,7 @@ import {
   Activity
 } from 'lucide-react-native';
 import { WorkoutSession, PersonalRecord } from '../types/workout';
+import { useResponsive } from '../hooks/useResponsive';
 import Theme from '../theme/theme';
 
 interface WorkoutSummaryModalProps {
@@ -38,6 +39,7 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
   prs,
   onClose,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   if (!session) return null;
 
   // Validação estrita de dados biométricos (Health Connect / Apple Health)
@@ -115,8 +117,8 @@ ${exercisesSummary}
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalBox}>
+      <View style={[styles.overlay, isFoldable && styles.overlayFoldable]}>
+        <View style={[styles.modalBox, isFoldable && { maxWidth: modalMaxWidth, borderRadius: Theme.borderRadius.xl }]}>
           
           {/* Header comemorativo */}
           <View style={styles.header}>
@@ -305,6 +307,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
+  overlayFoldable: {
+    justifyContent: 'center',
+    padding: 24,
+  },
   modalBox: {
     backgroundColor: Theme.colors.background,
     borderTopLeftRadius: Theme.borderRadius.xl,
@@ -313,8 +319,6 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.border,
     maxHeight: '92%',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     paddingTop: 24,
     paddingBottom: 36,
   },

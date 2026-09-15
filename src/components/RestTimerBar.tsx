@@ -2,9 +2,11 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, AppState, AppStateStatus } from 'react-native';
 import { Timer, X, Plus } from 'lucide-react-native';
 import { useWorkoutStore } from '../store/workoutStore';
+import { useResponsive } from '../hooks/useResponsive';
 import Theme from '../theme/theme';
 
 export const RestTimerBar: React.FC = () => {
+  const { isFoldable } = useResponsive();
   const { 
     restTimer, 
     tickRestTimer, 
@@ -59,7 +61,7 @@ export const RestTimerBar: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isFoldable && styles.containerFoldable]}>
       <View style={[styles.progressBar, { width: `${Math.min(100, Math.max(0, progress * 100))}%` }]} />
       
       <View style={styles.content}>
@@ -107,6 +109,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
     zIndex: 999,
+  },
+  containerFoldable: {
+    maxWidth: 580,
+    alignSelf: 'center',
+    left: undefined,
+    right: undefined,
+    width: '90%',
   },
   progressBar: {
     height: 2,

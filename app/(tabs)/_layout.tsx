@@ -6,8 +6,11 @@ import Theme from '../../src/theme/theme';
 import { auth, onAuthStateChanged } from '../../src/services/firebase';
 import { useUserStore } from '../../src/store/userStore';
 
+import { useResponsive } from '../../src/hooks/useResponsive';
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { isFoldable, tabBarMaxWidth } = useResponsive();
   const bottomPadding = Math.max(8, insets.bottom);
   const barHeight = 54 + bottomPadding;
 
@@ -43,6 +46,19 @@ export default function TabLayout() {
           height: barHeight,
           paddingBottom: bottomPadding,
           paddingTop: 6,
+          ...(isFoldable && tabBarMaxWidth
+            ? {
+                maxWidth: tabBarMaxWidth,
+                alignSelf: 'center',
+                marginHorizontal: 'auto',
+                borderLeftWidth: 1,
+                borderRightWidth: 1,
+                borderColor: Theme.colors.border,
+              }
+            : {}),
+        },
+        tabBarItemStyle: {
+          paddingVertical: 2,
         },
         tabBarLabelStyle: {
           fontSize: 11,

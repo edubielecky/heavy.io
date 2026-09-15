@@ -31,6 +31,7 @@ import { Exercise, MuscleGroup, Equipment } from '../../src/types/workout';
 import { useWorkoutStore } from '../../src/store/workoutStore';
 import { ExerciseProgressModal } from '../../src/components/ExerciseProgressModal';
 import { CustomExerciseModal } from '../../src/components/CustomExerciseModal';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import Theme from '../../src/theme/theme';
 
 const MUSCLE_GROUPS: { label: string; value: MuscleGroup | 'todos' }[] = [
@@ -71,6 +72,7 @@ export default function ExercisesScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { currentWorkout, addExerciseToCurrentWorkout, personalRecords, loadFromDatabase } = useWorkoutStore();
+  const { isFoldable, maxContentWidth, numColumns } = useResponsive();
 
   useFocusEffect(
     useCallback(() => {
@@ -143,7 +145,7 @@ export default function ExercisesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <View style={[styles.container, isFoldable && { maxWidth: maxContentWidth, alignSelf: 'center' }]}>
         {/* Header Superior com Botão de Novo Exercício */}
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
@@ -234,10 +236,13 @@ export default function ExercisesScreen() {
           />
         </View>
 
-        {/* Lista de Exercícios Filtrados */}
+        {/* Lista de Exercícios Filtrados (1 coluna em compact, 2 colunas em dobráveis) */}
         <FlatList
+          key={isFoldable ? 'grid-2' : 'list-1'}
           data={exercises}
           keyExtractor={(item) => item.id}
+          numColumns={numColumns}
+          columnWrapperStyle={isFoldable ? styles.columnWrapper : undefined}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
@@ -245,7 +250,7 @@ export default function ExercisesScreen() {
 
             return (
               <TouchableOpacity
-                style={styles.exerciseCard}
+                style={[styles.exerciseCard, isFoldable && styles.exerciseCardGrid]}
                 onPress={() => handleOpenExercise(item)}
                 activeOpacity={0.8}
               >
@@ -384,13 +389,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,
     paddingHorizontal: 18,
     paddingTop: 12,
+    width: '100%',
   },
   header: {
     marginBottom: 14,
@@ -496,12 +500,18 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 10,
   },
+  columnWrapper: {
+    gap: 10,
+  },
   exerciseCard: {
     backgroundColor: '#121215',
     borderRadius: Theme.borderRadius.md,
     padding: 14,
     borderWidth: 1,
     borderColor: Theme.colors.border,
+  },
+  exerciseCardGrid: {
+    flex: 1,
   },
   cardHeader: {
     flexDirection: 'row',

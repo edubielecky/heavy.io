@@ -22,6 +22,7 @@ import {
   MovementPattern 
 } from '../types/workout';
 import { createCustomExercise, updateCustomExercise } from '../database/database';
+import { useResponsive } from '../hooks/useResponsive';
 import Theme from '../theme/theme';
 
 interface CustomExerciseModalProps {
@@ -71,6 +72,7 @@ export const CustomExerciseModal: React.FC<CustomExerciseModalProps> = ({
   onSave,
   exerciseToEdit,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   const isEditing = !!exerciseToEdit;
 
   const [name, setName] = useState('');
@@ -173,7 +175,7 @@ export const CustomExerciseModal: React.FC<CustomExerciseModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, isFoldable && { maxWidth: modalMaxWidth, alignSelf: 'center' }]}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -357,8 +359,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

@@ -35,6 +35,7 @@ import {
   auditSingleRoutine,
   AuditAction,
 } from '../services/aiWorkoutService';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface WorkoutAuditModalProps {
   visible: boolean;
@@ -51,6 +52,7 @@ export const WorkoutAuditModal: React.FC<WorkoutAuditModalProps> = ({
   routine,
   onApplyAction,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   const [loading, setLoading] = useState(true);
   const [auditResult, setAuditResult] = useState<WorkoutAuditResult | null>(null);
   const [activeTab, setActiveTab] = useState<'findings' | 'volume'>('findings');
@@ -137,7 +139,7 @@ export const WorkoutAuditModal: React.FC<WorkoutAuditModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isFoldable && { maxWidth: modalMaxWidth, alignSelf: 'center' }]}>
         {/* Header Técnico */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
@@ -451,8 +453,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.background,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

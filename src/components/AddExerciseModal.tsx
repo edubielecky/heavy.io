@@ -13,6 +13,7 @@ import { Search, X, Dumbbell, Plus, Sparkles } from 'lucide-react-native';
 import { getExercises } from '../database/database';
 import { Exercise, MuscleGroup } from '../types/workout';
 import { CustomExerciseModal } from './CustomExerciseModal';
+import { useResponsive } from '../hooks/useResponsive';
 import Theme from '../theme/theme';
 
 interface AddExerciseModalProps {
@@ -41,12 +42,12 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
   onClose,
   onSelectExercise,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   const [search, setSearch] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'todos'>('todos');
   const [customModalOpen, setCustomModalOpen] = useState(false);
 
-  // Consulta instantânea no banco SQLite
-  const exercisesList = useMemo(() => {
+  const exercises = useMemo(() => {
     return getExercises({
       targetMuscle: selectedMuscle,
       search,
@@ -60,14 +61,14 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, isFoldable && { maxWidth: modalMaxWidth, alignSelf: 'center' }]}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.headerTitle}>Biblioteca de Exercícios</Text>
               <Text style={styles.headerSubtitle}>
-                {exercisesList.length} exercícios disponíveis
+                {exercises.length} exercícios disponíveis
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -132,7 +133,7 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
 
           {/* List of Exercises */}
           <FlatList
-            data={exercisesList}
+            data={exercises}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.exerciseList}
             renderItem={({ item }) => (
@@ -193,8 +194,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.background,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,

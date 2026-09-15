@@ -31,6 +31,7 @@ import { Exercise } from '../src/types/workout';
 import { createProgram, setActiveProgram } from '../src/database/database';
 import { useUserStore } from '../src/store/userStore';
 import { useWorkoutStore } from '../src/store/workoutStore';
+import { useResponsive } from '../src/hooks/useResponsive';
 import { BatchExerciseModal } from '../src/components/BatchExerciseModal';
 
 // Interfaces de apoio para o assistente de montagem da Trilha A
@@ -127,6 +128,7 @@ const DAYS_OPTIONS = [
 
 export default function OnboardingAdvancedScreen() {
   const router = useRouter();
+  const { maxContentWidth } = useResponsive();
   const { completeOnboarding } = useUserStore();
 
   // Etapa atual do wizard: 1, 2, 3 ou 4
@@ -369,7 +371,7 @@ export default function OnboardingAdvancedScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.topNav}>
+      <View style={[styles.topNav, { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' }]}>
         <TouchableOpacity 
           style={styles.backBtn}
           onPress={() => {
@@ -398,7 +400,7 @@ export default function OnboardingAdvancedScreen() {
         <Text style={styles.stepIndicatorText}>{currentStep}/4</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { maxWidth: maxContentWidth }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.stepTitle}>{stepTitles[currentStep]}</Text>
 
         {/* ========================================================= */}
@@ -840,9 +842,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   topNav: {
     flexDirection: 'row',
@@ -880,7 +879,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 70,
     width: '100%',
-    maxWidth: 480,
     alignSelf: 'center',
   },
   stepTitle: {

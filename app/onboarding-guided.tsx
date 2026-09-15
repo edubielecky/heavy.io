@@ -39,6 +39,7 @@ import {
   generateGuidedRoutine,
 } from '../src/services/recommendationEngine';
 import { BiologicalSex, MusclePriority, useUserStore } from '../src/store/userStore';
+import { useResponsive } from '../src/hooks/useResponsive';
 import Theme from '../src/theme/theme';
 import { Exercise, WorkoutProgram } from '../src/types/workout';
 
@@ -55,6 +56,7 @@ type StepKey =
 
 export default function OnboardingGuidedScreen() {
   const router = useRouter();
+  const { maxContentWidth } = useResponsive();
   const { hasCompletedOnboarding, profile, completeOnboarding } = useUserStore();
 
   // Se o usuário já possui biometria salva no banco/store, pula perguntas básicas e foca em mudança de treino
@@ -420,7 +422,7 @@ export default function OnboardingGuidedScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Top Header & Progress */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' }]}>
         <TouchableOpacity style={styles.backButton} onPress={handlePrevStep} activeOpacity={0.8}>
           <ArrowLeft size={20} color={Theme.colors.text} />
         </TouchableOpacity>
@@ -443,7 +445,7 @@ export default function OnboardingGuidedScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { maxWidth: maxContentWidth }]} showsVerticalScrollIndicator={false}>
         {isExistingProfile && currentStepKey !== 'result' && (
           <View style={styles.profileBadgeBanner}>
             <View style={styles.profileBadgeLeft}>
@@ -1174,9 +1176,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#09090B',
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   topBar: {
     flexDirection: 'row',
@@ -1225,7 +1224,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 60,
     width: '100%',
-    maxWidth: 480,
     alignSelf: 'center',
   },
   profileBadgeBanner: {

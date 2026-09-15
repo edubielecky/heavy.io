@@ -94,9 +94,11 @@ import {
 } from '../../src/services/healthConnectService';
 import Theme from '../../src/theme/theme';
 import { RoutineManagementModal } from '../../src/components/RoutineManagementModal';
+import { useResponsive } from '../../src/hooks/useResponsive';
 
 export default function AthleteControlCenterScreen() {
   const router = useRouter();
+  const { isFoldable, maxContentWidth } = useResponsive();
   const { workoutHistory, loadFromDatabase, discardActiveSession } = useWorkoutStore();
   const { 
     isGuest,
@@ -590,7 +592,14 @@ export default function AthleteControlCenterScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isFoldable && { maxWidth: maxContentWidth, alignSelf: 'center' },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         
         {/* Header de Identidade do Atleta */}
         <View style={styles.header}>
@@ -1856,8 +1865,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.background,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,
@@ -1866,8 +1873,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 60,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

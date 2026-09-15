@@ -30,6 +30,7 @@ import Theme from '../theme/theme';
 import { Exercise } from '../types/workout';
 import { getExerciseProgressHistory, ExerciseProgressPoint } from '../database/database';
 import { useWorkoutStore } from '../store/workoutStore';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface ExerciseProgressModalProps {
   visible: boolean;
@@ -39,8 +40,6 @@ interface ExerciseProgressModalProps {
   onDeleteCustomExercise?: (exercise: Exercise) => void;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_WIDTH = SCREEN_WIDTH - 64;
 const CHART_HEIGHT = 160;
 
 export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
@@ -50,6 +49,8 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
   onEditCustomExercise,
   onDeleteCustomExercise,
 }) => {
+  const { width, isFoldable, modalMaxWidth } = useResponsive();
+  const chartWidth = isFoldable ? Math.min(modalMaxWidth - 64, 520) : width - 64;
   const { currentWorkout, addExerciseToCurrentWorkout } = useWorkoutStore();
 
   const history = useMemo(() => {
@@ -74,7 +75,7 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
 
     const paddingX = 24;
     const paddingY = 24;
-    const usableWidth = CHART_WIDTH - paddingX * 2;
+    const usableWidth = chartWidth - paddingX * 2;
     const usableHeight = CHART_HEIGHT - paddingY * 2;
 
     const coords = points.map((p, idx) => {
@@ -95,7 +96,7 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
     });
 
     return { coords, pathD, minW, maxW };
-  }, [history]);
+  }, [history, chartWidth]);
 
   if (!exercise) return null;
 
@@ -126,8 +127,8 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
-        <View style={styles.container}>
+      <SafeAreaView style={[styles.overlay, isFoldable && styles.overlayFoldable]}>
+        <View style={[styles.container, isFoldable && { maxWidth: modalMaxWidth, borderRadius: 16, borderLeftWidth: 1, borderRightWidth: 1 }]}>
           {/* Header Superior */}
           <View style={styles.header}>
             <View style={{ flex: 1, paddingRight: 10 }}>
@@ -250,12 +251,12 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
                 {/* Gráfico SVG de Progressão */}
                 {chartData && (
                   <View style={styles.chartContainer}>
-                    <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+                    <Svg width={chartWidth} height={CHART_HEIGHT}>
                       {/* Linhas de grade sutis */}
                       <Line
                         x1="20"
                         y1={CHART_HEIGHT - 24}
-                        x2={CHART_WIDTH - 20}
+                        x2={chartWidth - 20}
                         y2={CHART_HEIGHT - 24}
                         stroke="rgba(255, 255, 255, 0.08)"
                         strokeWidth="1"
@@ -263,7 +264,7 @@ export const ExerciseProgressModal: React.FC<ExerciseProgressModalProps> = ({
                       <Line
                         x1="20"
                         y1="24"
-                        x2={CHART_WIDTH - 20}
+                        x2={chartWidth - 20}
                         y2="24"
                         stroke="rgba(255, 255, 255, 0.08)"
                         strokeWidth="1"
@@ -394,11 +395,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
+  overlayFoldable: {
+    justifyContent: 'center',
+    padding: 24,
+  },
   container: {
     flex: 1,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

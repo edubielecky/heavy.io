@@ -13,6 +13,7 @@ import { Search, X, Check, Dumbbell, Plus, CheckCircle2, Circle } from 'lucide-r
 import * as Haptics from 'expo-haptics';
 import { getExercises } from '../database/database';
 import { Exercise, MuscleGroup, Equipment } from '../types/workout';
+import { useResponsive } from '../hooks/useResponsive';
 import Theme from '../theme/theme';
 
 interface BatchExerciseModalProps {
@@ -38,13 +39,13 @@ const MUSCLE_FILTERS: { label: string; value: MuscleGroup | 'todos' }[] = [
 ];
 
 const EQUIPMENT_FILTERS: { label: string; value: Equipment | 'todos' }[] = [
-  { label: 'Todos os Equipamentos', value: 'todos' },
+  { label: 'Todos os Equip.', value: 'todos' },
   { label: 'Barra', value: 'barbell' },
   { label: 'Halter', value: 'dumbbell' },
-  { label: 'Polia / Cabo', value: 'cable' },
+  { label: 'Polia', value: 'cable' },
   { label: 'Máquina', value: 'machine' },
   { label: 'Smith', value: 'smith' },
-  { label: 'Peso do Corpo', value: 'bodyweight' },
+  { label: 'Peso Corporal', value: 'bodyweight' },
 ];
 
 export const BatchExerciseModal: React.FC<BatchExerciseModalProps> = ({
@@ -53,6 +54,7 @@ export const BatchExerciseModal: React.FC<BatchExerciseModalProps> = ({
   onConfirmBatch,
   alreadySelectedIds = [],
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   const [search, setSearch] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'todos'>('todos');
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | 'todos'>('todos');
@@ -119,7 +121,7 @@ export const BatchExerciseModal: React.FC<BatchExerciseModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, isFoldable && { maxWidth: modalMaxWidth, alignSelf: 'center' }]}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
@@ -283,8 +285,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#09090B',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   container: {
     flex: 1,

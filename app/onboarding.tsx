@@ -18,10 +18,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OnboardingTrack, useUserStore } from '../src/store/userStore';
+import { useResponsive } from '../src/hooks/useResponsive';
 import Theme from '../src/theme/theme';
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { maxContentWidth } = useResponsive();
   const { onboardingTrack, setOnboardingTrack } = useUserStore();
 
   const [selectedTrack, setSelectedTrack] = useState<OnboardingTrack>(
@@ -47,7 +49,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { maxWidth: maxContentWidth }]} showsVerticalScrollIndicator={false}>
         {/* Header Superior */}
         <View style={styles.header}>
           <Text style={styles.title}>Como deseja estruturar seu treino?</Text>
@@ -189,7 +191,6 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     paddingBottom: 60,
     width: '100%',
-    maxWidth: 480,
     alignSelf: 'center',
   },
   header: {

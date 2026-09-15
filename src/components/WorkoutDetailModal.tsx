@@ -12,6 +12,7 @@ import { X, Calendar, Clock, Weight, Dumbbell, Trophy, Check, Award, Flame, Tras
 import Theme from '../theme/theme';
 import { WorkoutSession, WorkoutExercise, PersonalRecord } from '../types/workout';
 import { getWorkoutSession, getSessionPRs } from '../database/database';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface WorkoutDetailModalProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({
   session,
   onDelete,
 }) => {
+  const { isFoldable, modalMaxWidth } = useResponsive();
   // Busca dados completos atualizados da sessão e os PRs batidos
   const { detailedSession, sessionPRs } = useMemo(() => {
     if (!session?.id) return { detailedSession: null, sessionPRs: [] };
@@ -71,8 +73,8 @@ export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
-        <View style={styles.container}>
+      <SafeAreaView style={[styles.overlay, isFoldable && styles.overlayFoldable]}>
+        <View style={[styles.container, isFoldable && { maxWidth: modalMaxWidth, borderRadius: 16, borderLeftWidth: 1, borderRightWidth: 1 }]}>
           {/* Header Superior */}
           <View style={styles.header}>
             <View style={{ flex: 1, paddingRight: 10 }}>
@@ -265,11 +267,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
+  overlayFoldable: {
+    justifyContent: 'center',
+    padding: 24,
+  },
   container: {
     flex: 1,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     backgroundColor: '#09090B',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
