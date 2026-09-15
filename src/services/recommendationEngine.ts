@@ -1,6 +1,7 @@
 import { Exercise, MuscleGroup, Equipment, MovementPattern, ExerciseMechanic } from '../types/workout';
 import { SEED_EXERCISES } from '../database/seedData';
 import { getExercises, createCustomExercise } from '../database/database';
+import { callGeminiWithFallback } from './geminiClient';
 
 export type WeeklyFrequency = 2 | 3 | 4 | 5 | 6;
 export type SessionDuration = '30-45' | '45-60' | '60-90';
@@ -1257,68 +1258,18 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
 
   try {
     const timeoutMs = options?.timeoutMs || 45000;
-    let response: Response | null = null;
-    let lastError: any = null;
+    const geminiResult = await callGeminiWithFallback<any>({
+      apiKey: trimmedKey,
+      systemInstruction,
+      prompt,
+      temperature: 0.25,
+      responseMimeType: 'application/json',
+      timeoutMs,
+    });
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const parsed = geminiResult.data;
+    const usedModel = geminiResult.usedModel;
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${trimmedKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
-              generationConfig: {
-                temperature: 0.25,
-                responseMimeType: 'application/json',
-              },
-            }),
-          }
-        );
-        clearTimeout(timer);
-
-        if (res.ok) {
-          response = res;
-          break;
-        } else if (res.status === 503 && attempt === 1) {
-          console.warn('[heavy.io] Gemini retornou 503 (ocupado), tentando novamente em 2s...');
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        } else {
-          throw new Error(`Gemini API error: ${res.status} ${res.statusText}`);
-        }
-      } catch (err: any) {
-        clearTimeout(timer);
-        lastError = err;
-        if (attempt === 1 && (err?.name === 'AbortError' || err?.message?.includes('network') || err?.message?.includes('fetch'))) {
-          console.warn('[heavy.io] Tentativa 1 com IA falhou, tentando novamente...');
-          await new Promise(r => setTimeout(r, 1500));
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    if (!response) {
-      throw lastError || new Error('Não foi possível obter resposta da API Gemini.');
-    }
-
-    const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) {
-      throw new Error('Gemini retornou resposta vazia.');
-    }
-
-    let cleanText = rawText.trim();
-    if (cleanText.startsWith('```')) {
-      cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-    }
-    const parsed = JSON.parse(cleanText);
     if (!parsed || !Array.isArray(parsed.sessions) || parsed.sessions.length === 0) {
       throw new Error('Sessões inválidas no retorno da IA.');
     }
@@ -1448,7 +1399,7 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
         recoveryRecommendation: 'Descanso inter-série ajustado para regeneração de fosfagênios e controle de fadiga neural.',
       },
       isAiGenerated: true,
-      aiEngine: 'gemini-3.6-flash',
+      aiEngine: usedModel || 'gemini-flash',
     };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);
@@ -1597,64 +1548,27 @@ Retorne ESTRITAMENTE o seguinte JSON:
 
   try {
     const timeoutMs = options?.timeoutMs || 15000;
-    let response: Response | null = null;
+    const geminiRes = await callGeminiWithFallback<any>({
+      apiKey,
+      systemInstruction,
+      prompt,
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      timeoutMs,
+    });
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const parsed = geminiRes.data;
+    if (parsed && parsed.selectedExerciseId) {
+      const match = candidates.find(c => c.id === parsed.selectedExerciseId) ||
+        available.find(a => a.id === parsed.selectedExerciseId) ||
+        candidates.find(c => c.name.toLowerCase() === parsed.selectedExerciseName?.toLowerCase()) ||
+        candidates[0];
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
-              generationConfig: {
-                temperature: 0.2,
-                responseMimeType: 'application/json',
-              },
-            }),
-          }
-        );
-        clearTimeout(timer);
-
-        if (res.ok) {
-          response = res;
-          break;
-        } else if ((res.status === 429 || res.status === 503) && attempt === 1) {
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        } else {
-          break;
-        }
-      } catch (e) {
-        clearTimeout(timer);
-        if (attempt === 1) {
-          await new Promise(r => setTimeout(r, 1500));
-          continue;
-        }
-      }
-    }
-
-    if (response && response.ok) {
-      const data = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (rawText) {
-        const parsed = JSON.parse(rawText);
-        const match = candidates.find(c => c.id === parsed.selectedExerciseId) ||
-          available.find(a => a.id === parsed.selectedExerciseId) ||
-          candidates.find(c => c.name.toLowerCase() === parsed.selectedExerciseName?.toLowerCase()) ||
-          candidates[0];
-
-        if (match) {
-          return {
-            substitute: match,
-            activationExplanation: parsed.activationExplanation || `Mesma ativação neuromuscular no grupamento ${match.targetMuscle}.`,
-          };
-        }
+      if (match) {
+        return {
+          substitute: match,
+          activationExplanation: parsed.activationExplanation || `Mesma ativação neuromuscular no grupamento ${match.targetMuscle}.`,
+        };
       }
     }
   } catch (err) {

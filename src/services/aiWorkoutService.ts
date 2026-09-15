@@ -8,6 +8,7 @@ import {
 } from '../types/workout';
 import { getExercises, getExerciseById } from '../database/database';
 import { SEED_EXERCISES } from '../database/seedData';
+import { callGeminiWithFallback } from './geminiClient';
 
 export type AuditSeverity = 'critical' | 'warning' | 'optimization' | 'positive';
 
@@ -511,36 +512,16 @@ Retorne ESTRITAMENTE um objeto JSON válido (sem tags de código markdown, sem c
   ]
 }`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `${systemInstruction}\n\n${prompt}` }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
+  const geminiResult = await callGeminiWithFallback<any>({
+    apiKey: apiKey.trim(),
+    systemInstruction,
+    prompt,
+    temperature: 0.2,
+    responseMimeType: 'application/json',
+    timeoutMs: 25000,
+  });
 
-  if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawText) {
-    throw new Error('Gemini retornou resposta vazia.');
-  }
-
-  let cleanText = rawText.trim();
-  if (cleanText.startsWith('```')) {
-    cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  }
-  const parsed = JSON.parse(cleanText);
+  const parsed = geminiResult.data;
 
   // Mescla a inteligência do LLM com os dados cinemáticos exatos do motor local
   return {
