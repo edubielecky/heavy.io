@@ -239,10 +239,21 @@ function getDeterministicProfileSeed(inputs: GuidedInputs): number {
   const weightFactor = Math.round((inputs.weightKg || 75) * 19);
   const heightFactor = (inputs.heightCm || 175) * 23;
   const priorityFactor = (inputs.musclePriority?.length || 5) * 41;
-  const freqFactor = inputs.frequency * 17;
+  const freqFactor = (inputs.frequency || 4) * 17;
+  
+  // Adicionando todas as respostas do questionário
+  const durationFactor = (inputs.sessionDuration?.length || 5) * 29;
+  const goalFactor = (inputs.goal?.length || 4) * 53;
+  const experienceFactor = (inputs.experienceLevel?.length || 8) * 67;
+  const equipmentFactor = (inputs.equipment?.length || 10) * 83;
+  const restrictionsFactor = (inputs.restrictions?.length || 0) * 97;
 
   // Adiciona entropia com Date.now() para que o fallback gere exercícios diferentes a cada tentativa
-  return Math.abs(sexFactor + ageFactor + weightFactor + heightFactor + priorityFactor + freqFactor) + Date.now();
+  return Math.abs(
+    sexFactor + ageFactor + weightFactor + heightFactor + priorityFactor + 
+    freqFactor + durationFactor + goalFactor + experienceFactor + 
+    equipmentFactor + restrictionsFactor
+  ) + Date.now();
 }
 
 /**
