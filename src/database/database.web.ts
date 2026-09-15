@@ -223,6 +223,14 @@ export const getExercises = (options?: {
     })),
   ];
 
+  // Garante IDs únicos
+  const seenIds = new Set<string>();
+  all = all.filter(e => {
+    if (!e.id || seenIds.has(e.id)) return false;
+    seenIds.add(e.id);
+    return true;
+  });
+
   if (options?.targetMuscle && options.targetMuscle !== 'todos') {
     all = all.filter(e => e.targetMuscle === options.targetMuscle);
   }
