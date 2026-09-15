@@ -338,6 +338,7 @@ export default function OnboardingAdvancedScreen() {
       // 2. Marca onboarding como concluído na store
       completeOnboarding({
         onboardingTrack: 'advanced',
+        preferredDaysPerWeek: sessions.length,
       });
 
       // 3. Força atualização imediata da store de treinos

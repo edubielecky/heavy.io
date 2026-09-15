@@ -33,6 +33,7 @@ import {
   LogOut, 
   Sliders, 
   Dumbbell, 
+  Target,
   X,
   Check,
   Zap,
@@ -144,13 +145,130 @@ export default function AthleteControlCenterScreen() {
   const [isHealthSyncing, setIsHealthSyncing] = useState(false);
   const [healthFeedback, setHealthFeedback] = useState<string | null>(null);
 
+  // Resolução refinada de dados do perfil do atleta
+  // Se o usuário estiver na trilha avançada sem nunca ter editado manualmente as métricas,
+  // os dados antropométricos devem ficar em branco para preenchimento manual pelo usuário.
+  const isAdvancedWithoutMetrics = profile?.onboardingTrack === 'advanced' && !profile?.metricsManuallyEdited;
+
+  const userWeight = isAdvancedWithoutMetrics ? undefined : profile?.bodyWeightKg;
+  const userHeight = isAdvancedWithoutMetrics ? undefined : profile?.heightCm;
+  const userExperience = isAdvancedWithoutMetrics ? undefined : profile?.experienceLevel;
+  const userGoal = isAdvancedWithoutMetrics ? undefined : profile?.primaryGoal;
+  const userMusclePriority = isAdvancedWithoutMetrics ? undefined : profile?.musclePriority;
+  const userSex = isAdvancedWithoutMetrics ? undefined : profile?.biologicalSex;
+  const userAge = isAdvancedWithoutMetrics ? undefined : profile?.age;
+  const userEquipment = isAdvancedWithoutMetrics ? undefined : profile?.equipmentEnvironment;
+  const userRestrictions = isAdvancedWithoutMetrics ? undefined : profile?.physicalRestrictions;
+
+  // Frequência alvo garantida condizente com a estrutura de treino escolhida
+  const activeRoutinesCount = (activeProgram?.routines && activeProgram.routines.length > 0)
+    ? activeProgram.routines.length
+    : (routines && routines.length > 0)
+      ? routines.length
+      : undefined;
+
+  const targetFrequency = activeRoutinesCount || profile?.preferredDaysPerWeek;
+
+  // Cálculo de IMC do atleta se houver peso e estatura
+  const athleteBmi = (userWeight && userHeight)
+    ? (userWeight / Math.pow(userHeight / 100, 2)).toFixed(1)
+    : null;
+
+  // Formatadores de texto para labels e badges
+  const getExperienceLabel = (level?: UserProfile['experienceLevel']) => {
+    if (level === 'iniciante') return 'Iniciante';
+    if (level === 'intermediario') return 'Intermediário';
+    if (level === 'avancado') return 'Avançado';
+    return null;
+  };
+
+  const getGoalLabel = (goal?: UserProfile['primaryGoal']) => {
+    if (goal === 'forca_pura') return 'Força Pura';
+    if (goal === 'hipertrofia') return 'Hipertrofia';
+    if (goal === 'recomposicao') return 'Recomposição';
+    return null;
+  };
+
+  const getPriorityLabel = (priority?: UserProfile['musclePriority']) => {
+    switch (priority) {
+      case 'chest': return 'Peitoral';
+      case 'back': return 'Costas';
+      case 'legs_glutes': return 'Pernas & Glúteos';
+      case 'shoulders': return 'Ombros';
+      case 'arms': return 'Braços';
+      case 'balanced': return 'Equilibrado';
+      default: return null;
+    }
+  };
+
+  const getEquipmentLabel = (equipment?: UserProfile['equipmentEnvironment']) => {
+    switch (equipment) {
+      case 'commercial': return 'Academia Completa';
+      case 'condo': return 'Condomínio';
+      case 'home_dumbbells': return 'Halteres em Casa';
+      default: return null;
+    }
+  };
+
+  const getRestrictionsLabel = (restrictions?: UserProfile['physicalRestrictions']) => {
+    if (!restrictions || restrictions.length === 0) return null;
+    const filtered = restrictions.filter(r => r !== 'none');
+    if (filtered.length === 0) return 'Nenhuma';
+    return filtered.map(r => {
+      if (r === 'shoulders') return 'Ombros';
+      if (r === 'lower_back') return 'Lombar';
+      if (r === 'knees') return 'Joelhos';
+      return r;
+    }).join(', ');
+  };
+
+  const getBioLabel = (age?: number, sex?: UserProfile['biologicalSex']) => {
+    if (age && sex) return `${age}a • ${sex === 'male' ? 'Masc' : 'Fem'}`;
+    if (age) return `${age} anos`;
+    if (sex) return sex === 'male' ? 'Masculino' : 'Feminino';
+    return null;
+  };
+
   // Form temporário para edição de métricas
-  const [tempWeight, setTempWeight] = useState(String(profile?.bodyWeightKg || 80));
-  const [tempHeight, setTempHeight] = useState(String(profile?.heightCm || 178));
-  const [tempDays, setTempDays] = useState(profile?.preferredDaysPerWeek || 4);
-  const [tempExperience, setTempExperience] = useState<UserProfile['experienceLevel']>(
-    profile?.experienceLevel || 'intermediario'
-  );
+  const [tempWeight, setTempWeight] = useState('');
+  const [tempHeight, setTempHeight] = useState('');
+  const [tempAge, setTempAge] = useState('');
+  const [tempDays, setTempDays] = useState(4);
+  const [tempExperience, setTempExperience] = useState<UserProfile['experienceLevel']>('intermediario');
+  const [tempGoal, setTempGoal] = useState<UserProfile['primaryGoal']>('hipertrofia');
+  const [tempPriority, setTempPriority] = useState<UserProfile['musclePriority']>('balanced');
+  const [tempSex, setTempSex] = useState<UserProfile['biologicalSex']>('male');
+  const [tempEquipment, setTempEquipment] = useState<UserProfile['equipmentEnvironment']>('commercial');
+  const [tempRestrictions, setTempRestrictions] = useState<UserProfile['physicalRestrictions']>(['none']);
+
+  const openEditMetricsModal = () => {
+    setTempWeight(userWeight ? String(userWeight) : '');
+    setTempHeight(userHeight ? String(userHeight) : '');
+    setTempAge(userAge ? String(userAge) : '');
+    setTempDays(targetFrequency || 4);
+    setTempExperience(userExperience || 'intermediario');
+    setTempGoal(userGoal || 'hipertrofia');
+    setTempPriority(userMusclePriority || 'balanced');
+    setTempSex(userSex || 'male');
+    setTempEquipment(userEquipment || 'commercial');
+    setTempRestrictions(userRestrictions && userRestrictions.length > 0 ? userRestrictions : ['none']);
+    setIsEditMetricsModalOpen(true);
+  };
+
+  const toggleRestriction = (r: 'shoulders' | 'lower_back' | 'knees' | 'none') => {
+    Haptics.selectionAsync().catch(() => {});
+    if (r === 'none') {
+      setTempRestrictions(['none']);
+      return;
+    }
+    const current = (tempRestrictions || []).filter(item => item !== 'none');
+    if (current.includes(r)) {
+      const next = current.filter(item => item !== r);
+      setTempRestrictions(next.length === 0 ? ['none'] : next);
+    } else {
+      setTempRestrictions([...current, r]);
+    }
+  };
 
   useEffect(() => {
     loadFromDatabase();
@@ -221,6 +339,10 @@ export default function AthleteControlCenterScreen() {
       setRoutines(activeRoutines);
       const activeProg = getActiveProgram();
       setActiveProgramState(activeProg);
+      const count = activeProg?.routines?.length || activeRoutines.length;
+      if (count > 0 && profile?.preferredDaysPerWeek !== count) {
+        updateMetrics({ preferredDaysPerWeek: count });
+      }
     } catch (e) {
       console.error('Erro ao carregar rotinas:', e);
     }
@@ -249,14 +371,22 @@ export default function AthleteControlCenterScreen() {
 
   // Salvar Métricas Corporais
   const handleSaveMetrics = () => {
-    const weightNum = parseFloat(tempWeight.replace(',', '.')) || profile?.bodyWeightKg || 80;
-    const heightNum = parseInt(tempHeight, 10) || profile?.heightCm || 178;
+    const weightNum = tempWeight.trim() ? parseFloat(tempWeight.replace(',', '.')) : undefined;
+    const heightNum = tempHeight.trim() ? parseInt(tempHeight, 10) : undefined;
+    const ageNum = tempAge.trim() ? parseInt(tempAge, 10) : undefined;
 
     updateMetrics({
-      bodyWeightKg: weightNum,
-      heightCm: heightNum,
+      bodyWeightKg: isNaN(weightNum as number) ? undefined : weightNum,
+      heightCm: isNaN(heightNum as number) ? undefined : heightNum,
+      age: isNaN(ageNum as number) ? undefined : ageNum,
       preferredDaysPerWeek: tempDays,
       experienceLevel: tempExperience,
+      primaryGoal: tempGoal,
+      musclePriority: tempPriority,
+      biologicalSex: tempSex,
+      equipmentEnvironment: tempEquipment,
+      physicalRestrictions: tempRestrictions,
+      metricsManuallyEdited: true,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -456,15 +586,6 @@ export default function AthleteControlCenterScreen() {
     router.replace('/login' as any);
   };
 
-  const getExperienceLabel = (exp?: string) => {
-    switch (exp) {
-      case 'iniciante': return 'Iniciante (< 6 meses)';
-      case 'intermediario': return 'Intermediário (6m - 2 anos)';
-      case 'avancado': return 'Avançado (+ 2 anos)';
-      default: return 'Intermediário';
-    }
-  };
-
   const REST_PRESETS = [60, 90, 120, 180];
 
   return (
@@ -508,64 +629,299 @@ export default function AthleteControlCenterScreen() {
           </View>
         </View>
 
-        {/* 1. Métricas do Usuário */}
+        {/* 1. Métricas do Atleta */}
         <View style={styles.sectionHeader}>
           <Sliders size={16} color={Theme.colors.primary} />
           <Text style={styles.sectionTitle}>Métricas do Atleta</Text>
           <TouchableOpacity 
             style={styles.editHeaderBtn} 
-            onPress={() => {
-              setTempWeight(String(profile?.bodyWeightKg || 80));
-              setTempHeight(String(profile?.heightCm || 178));
-              setTempDays(profile?.preferredDaysPerWeek || 4);
-              setTempExperience(profile?.experienceLevel || 'intermediario');
-              setIsEditMetricsModalOpen(true);
-            }}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.7}
           >
             <Text style={styles.editHeaderText}>Editar</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <View style={styles.metricIconWrap}>
-              <Scale size={16} color={Theme.colors.textSecondary} />
+          {/* Card 1: Peso Corporal */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Scale size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!userWeight && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.metricValue}>
-              {profile?.bodyWeightKg || 80} <Text style={styles.metricUnit}>kg</Text>
+            <Text style={[styles.metricValue, !userWeight && styles.metricValueEmpty]}>
+              {userWeight ? (
+                <>
+                  {userWeight} <Text style={styles.metricUnit}>kg</Text>
+                </>
+              ) : (
+                '—'
+              )}
             </Text>
             <Text style={styles.metricLabel}>Peso Corporal</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.metricCard}>
-            <View style={styles.metricIconWrap}>
-              <Ruler size={16} color={Theme.colors.textSecondary} />
+          {/* Card 2: Estatura */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Ruler size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!userHeight && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.metricValue}>
-              {profile?.heightCm || 178} <Text style={styles.metricUnit}>cm</Text>
+            <Text style={[styles.metricValue, !userHeight && styles.metricValueEmpty]}>
+              {userHeight ? (
+                <>
+                  {userHeight} <Text style={styles.metricUnit}>cm</Text>
+                </>
+              ) : (
+                '—'
+              )}
             </Text>
             <Text style={styles.metricLabel}>Estatura</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.metricCard}>
-            <View style={styles.metricIconWrap}>
-              <Calendar size={16} color={Theme.colors.textSecondary} />
+          {/* Card 3: Frequência Alvo (Condizente com a ficha escolhida) */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Calendar size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {activeRoutinesCount && activeRoutinesCount > 0 ? (
+                <View style={styles.metricSyncBadge}>
+                  <Text style={styles.metricSyncBadgeText}>Ficha Ativa</Text>
+                </View>
+              ) : !targetFrequency ? (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Definir</Text>
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.metricValue}>
-              {profile?.preferredDaysPerWeek || 4} <Text style={styles.metricUnit}>dias/sem</Text>
+            <Text style={[styles.metricValue, !targetFrequency && styles.metricValueEmpty]}>
+              {targetFrequency ? (
+                <>
+                  {targetFrequency} <Text style={styles.metricUnit}>dias/sem</Text>
+                </>
+              ) : (
+                '—'
+              )}
             </Text>
             <Text style={styles.metricLabel}>Frequência Alvo</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.metricCard}>
-            <View style={styles.metricIconWrap}>
-              <Award size={16} color={Theme.colors.textSecondary} />
+          {/* Card 4: Experiência */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Award size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!getExperienceLabel(userExperience) && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
             </View>
-            <Text style={[styles.metricValue, { fontSize: 13, marginTop: 4 }]} numberOfLines={1}>
-              {profile?.experienceLevel === 'iniciante' ? 'Iniciante' : profile?.experienceLevel === 'avancado' ? 'Avançado' : 'Intermediário'}
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getExperienceLabel(userExperience) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getExperienceLabel(userExperience) || '—'}
             </Text>
             <Text style={styles.metricLabel}>Experiência</Text>
-          </View>
+          </TouchableOpacity>
+
+          {/* Card 5: Objetivo Principal */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Target size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!getGoalLabel(userGoal) && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
+            </View>
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getGoalLabel(userGoal) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getGoalLabel(userGoal) || '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Objetivo Principal</Text>
+          </TouchableOpacity>
+
+          {/* Card 6: Foco Muscular Prioritário */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Dumbbell size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!getPriorityLabel(userMusclePriority) && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
+            </View>
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getPriorityLabel(userMusclePriority) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getPriorityLabel(userMusclePriority) || '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Foco Muscular</Text>
+          </TouchableOpacity>
+
+          {/* Card 7: Idade & Biotipo */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <User size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!getBioLabel(userAge, userSex) && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
+            </View>
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getBioLabel(userAge, userSex) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getBioLabel(userAge, userSex) || '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Biótipo & Idade</Text>
+          </TouchableOpacity>
+
+          {/* Card 8: Ambiente de Treino */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Layers size={16} color={Theme.colors.textSecondary} />
+              </View>
+              {!getEquipmentLabel(userEquipment) && (
+                <View style={styles.metricAddBadge}>
+                  <Text style={styles.metricAddBadgeText}>+ Adicionar</Text>
+                </View>
+              )}
+            </View>
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getEquipmentLabel(userEquipment) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getEquipmentLabel(userEquipment) || '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Ambiente</Text>
+          </TouchableOpacity>
+
+          {/* Card 9: Índice IMC */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <Activity size={16} color={Theme.colors.textSecondary} />
+              </View>
+            </View>
+            <Text style={[styles.metricValue, !athleteBmi && styles.metricValueEmpty]}>
+              {athleteBmi ? (
+                <>
+                  {athleteBmi} <Text style={styles.metricUnit}>kg/m²</Text>
+                </>
+              ) : (
+                '—'
+              )}
+            </Text>
+            <Text style={styles.metricLabel}>Índice IMC</Text>
+          </TouchableOpacity>
+
+          {/* Card 10: Restrições Físicas */}
+          <TouchableOpacity 
+            style={styles.metricCard}
+            onPress={openEditMetricsModal}
+            activeOpacity={0.75}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconWrap}>
+                <ShieldCheck size={16} color={Theme.colors.textSecondary} />
+              </View>
+            </View>
+            <Text 
+              style={[
+                styles.metricValue, 
+                { fontSize: 13, marginTop: 4 },
+                !getRestrictionsLabel(userRestrictions) && styles.metricValueEmpty
+              ]} 
+              numberOfLines={1}
+            >
+              {getRestrictionsLabel(userRestrictions) || '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Restrições Articulares</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 2. Resumo de Consistência */}
@@ -952,9 +1308,12 @@ export default function AthleteControlCenterScreen() {
         onRequestClose={() => setIsEditMetricsModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Métricas</Text>
+              <View>
+                <Text style={styles.modalTitle}>Métricas do Atleta</Text>
+                <Text style={styles.modalSubTitle}>Atualize seus dados corporais e preferências</Text>
+              </View>
               <TouchableOpacity 
                 onPress={() => setIsEditMetricsModalOpen(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -963,31 +1322,81 @@ export default function AthleteControlCenterScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalInputs}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Peso Corporal (kg)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="decimal-pad"
-                  value={tempWeight}
-                  onChangeText={setTempWeight}
-                  placeholder="Ex: 82.5"
-                  placeholderTextColor={Theme.colors.textMuted}
-                />
+            <ScrollView 
+              style={{ maxHeight: 460 }} 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalInputs}
+            >
+              {/* Peso & Altura */}
+              <View style={styles.rowTwoCol}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Peso Corporal</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="decimal-pad"
+                    value={tempWeight}
+                    onChangeText={setTempWeight}
+                    placeholder="Ex: 80"
+                    placeholderTextColor={Theme.colors.textMuted}
+                  />
+                  <Text style={styles.inputSubLabel}>em kg</Text>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Estatura</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={tempHeight}
+                    onChangeText={setTempHeight}
+                    placeholder="Ex: 178"
+                    placeholderTextColor={Theme.colors.textMuted}
+                  />
+                  <Text style={styles.inputSubLabel}>em cm</Text>
+                </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Estatura (cm)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  keyboardType="numeric"
-                  value={tempHeight}
-                  onChangeText={setTempHeight}
-                  placeholder="Ex: 178"
-                  placeholderTextColor={Theme.colors.textMuted}
-                />
+              {/* Idade & Sexo */}
+              <View style={styles.rowTwoCol}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Idade</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    keyboardType="numeric"
+                    value={tempAge}
+                    onChangeText={setTempAge}
+                    placeholder="Ex: 26"
+                    placeholderTextColor={Theme.colors.textMuted}
+                  />
+                  <Text style={styles.inputSubLabel}>anos</Text>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Sexo Biológico</Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {(['male', 'female'] as const).map(s => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[
+                          styles.chip,
+                          { flex: 1, alignItems: 'center' },
+                          tempSex === s && styles.chipActive
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setTempSex(s);
+                        }}
+                      >
+                        <Text style={[styles.chipText, tempSex === s && styles.chipTextActive]}>
+                          {s === 'male' ? 'Masc' : 'Fem'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               </View>
 
+              {/* Frequência Semanal Alvo */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Frequência Semanal Alvo</Text>
                 <View style={styles.daysSelector}>
@@ -1006,31 +1415,137 @@ export default function AthleteControlCenterScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {activeRoutinesCount && activeRoutinesCount > 0 ? (
+                  <Text style={styles.inputSubLabel}>Sua ficha ativa atual possui {activeRoutinesCount} sessões semanais</Text>
+                ) : null}
               </View>
 
+              {/* Nível de Experiência */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Nível de Experiência</Text>
-                <View style={styles.expSelector}>
+                <View style={styles.chipsGrid}>
                   {(['iniciante', 'intermediario', 'avancado'] as const).map(lvl => (
                     <TouchableOpacity
                       key={lvl}
-                      style={[styles.expChoice, tempExperience === lvl && styles.expChoiceActive]}
+                      style={[styles.chip, tempExperience === lvl && styles.chipActive]}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
                         setTempExperience(lvl);
                       }}
                     >
-                      <Text style={[styles.expChoiceText, tempExperience === lvl && styles.expChoiceTextActive]}>
+                      <Text style={[styles.chipText, tempExperience === lvl && styles.chipTextActive]}>
                         {lvl === 'iniciante' ? 'Iniciante' : lvl === 'avancado' ? 'Avançado' : 'Intermediário'}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-            </View>
+
+              {/* Objetivo Principal */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Objetivo Principal</Text>
+                <View style={styles.chipsGrid}>
+                  {(['hipertrofia', 'forca_pura', 'recomposicao'] as const).map(g => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[styles.chip, tempGoal === g && styles.chipActive]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setTempGoal(g);
+                      }}
+                    >
+                      <Text style={[styles.chipText, tempGoal === g && styles.chipTextActive]}>
+                        {g === 'hipertrofia' ? 'Hipertrofia' : g === 'forca_pura' ? 'Força Pura' : 'Recomposição'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Foco Muscular Prioritário */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Foco Muscular Prioritário</Text>
+                <View style={styles.chipsGrid}>
+                  {([
+                    { id: 'balanced', label: 'Equilibrado' },
+                    { id: 'chest', label: 'Peitoral' },
+                    { id: 'back', label: 'Costas' },
+                    { id: 'legs_glutes', label: 'Pernas & Glúteos' },
+                    { id: 'shoulders', label: 'Ombros' },
+                    { id: 'arms', label: 'Braços' },
+                  ] as const).map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.chip, tempPriority === item.id && styles.chipActive]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setTempPriority(item.id);
+                      }}
+                    >
+                      <Text style={[styles.chipText, tempPriority === item.id && styles.chipTextActive]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Ambiente de Treino */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ambiente de Treino</Text>
+                <View style={styles.chipsGrid}>
+                  {([
+                    { id: 'commercial', label: 'Academia Completa' },
+                    { id: 'condo', label: 'Condomínio' },
+                    { id: 'home_dumbbells', label: 'Halteres em Casa' },
+                  ] as const).map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.chip, tempEquipment === item.id && styles.chipActive]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setTempEquipment(item.id);
+                      }}
+                    >
+                      <Text style={[styles.chipText, tempEquipment === item.id && styles.chipTextActive]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Restrições / Cuidados Articulares */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Restrições / Cuidados Articulares</Text>
+                <View style={styles.chipsGrid}>
+                  {([
+                    { id: 'none', label: 'Nenhuma' },
+                    { id: 'shoulders', label: 'Ombros' },
+                    { id: 'lower_back', label: 'Lombar' },
+                    { id: 'knees', label: 'Joelhos' },
+                  ] as const).map(item => {
+                    const isSelected = item.id === 'none' 
+                      ? (!tempRestrictions || tempRestrictions.includes('none') || tempRestrictions.length === 0)
+                      : (tempRestrictions && tempRestrictions.includes(item.id as any));
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.chip, isSelected && styles.chipActive]}
+                        onPress={() => toggleRestriction(item.id as any)}
+                      >
+                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
 
             <TouchableOpacity 
-              style={styles.modalPrimaryBtn}
+              style={[styles.modalPrimaryBtn, { marginTop: 14 }]}
               onPress={handleSaveMetrics}
               activeOpacity={0.8}
             >
@@ -1458,6 +1973,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
+  metricCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   metricIconWrap: {
     width: 28,
     height: 28,
@@ -1465,13 +1986,42 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+  },
+  metricAddBadge: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderLight,
+  },
+  metricAddBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Theme.colors.textMuted,
+  },
+  metricSyncBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
+  },
+  metricSyncBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Theme.colors.success,
   },
   metricValue: {
     fontSize: 18,
     fontWeight: '900',
     color: Theme.colors.text,
     fontVariant: ['tabular-nums'],
+  },
+  metricValueEmpty: {
+    color: Theme.colors.textMuted,
+    fontWeight: '400',
   },
   metricUnit: {
     fontSize: 12,
@@ -1946,6 +2496,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Theme.colors.text,
   },
+  modalSubTitle: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    marginTop: 2,
+  },
   modalSub: {
     fontSize: 12,
     color: Theme.colors.textMuted,
@@ -1954,7 +2509,12 @@ const styles = StyleSheet.create({
   },
   modalInputs: {
     gap: 14,
-    marginBottom: 20,
+    marginBottom: 14,
+    paddingBottom: 10,
+  },
+  rowTwoCol: {
+    flexDirection: 'row',
+    gap: 10,
   },
   inputGroup: {},
   inputLabel: {
@@ -1964,16 +2524,46 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: 'uppercase',
   },
+  inputSubLabel: {
+    fontSize: 10,
+    color: Theme.colors.textMuted,
+    marginTop: 4,
+  },
   textInput: {
     backgroundColor: Theme.colors.surfaceElevated,
     borderRadius: Theme.borderRadius.md,
     borderWidth: 1,
     borderColor: Theme.colors.border,
     color: Theme.colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  chipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Theme.borderRadius.sm,
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  chipActive: {
+    borderColor: Theme.colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+  },
+  chipTextActive: {
+    color: Theme.colors.text,
   },
   daysSelector: {
     flexDirection: 'row',

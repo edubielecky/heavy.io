@@ -57,9 +57,9 @@ export default function OnboardingGuidedScreen() {
   const router = useRouter();
   const { hasCompletedOnboarding, profile, completeOnboarding } = useUserStore();
 
-  // Se o usuário já possui perfil salvo no banco/store, pula perguntas básicas e foca em mudança de treino
+  // Se o usuário já possui biometria salva no banco/store, pula perguntas básicas e foca em mudança de treino
   const isExistingProfile = Boolean(
-    hasCompletedOnboarding || (profile?.bodyWeightKg && profile?.heightCm)
+    profile?.bodyWeightKg && profile?.heightCm
   );
 
   const stepsOrder = useMemo<StepKey[]>(() => {
@@ -92,9 +92,9 @@ export default function OnboardingGuidedScreen() {
 
   // Passo 1: Biometria & Fisiologia (carrega dados salvos do usuário)
   const [biologicalSex, setBiologicalSex] = useState<BiologicalSex>(profile?.biologicalSex || 'male');
-  const [age, setAge] = useState<string>(profile?.age ? String(profile.age) : '26');
-  const [weight, setWeight] = useState<string>(profile?.bodyWeightKg ? String(profile.bodyWeightKg) : '78');
-  const [height, setHeight] = useState<string>(profile?.heightCm ? String(profile.heightCm) : '176');
+  const [age, setAge] = useState<string>(profile?.age ? String(profile.age) : '');
+  const [weight, setWeight] = useState<string>(profile?.bodyWeightKg ? String(profile.bodyWeightKg) : '');
+  const [height, setHeight] = useState<string>(profile?.heightCm ? String(profile.heightCm) : '');
 
   // Passo 2: Foco Muscular Prioritário
   const [musclePriority, setMusclePriority] = useState<MusclePriority>(profile?.musclePriority || 'balanced');
@@ -379,6 +379,7 @@ export default function OnboardingGuidedScreen() {
         preferredDaysPerWeek: frequency,
         equipmentEnvironment: equipment,
         physicalRestrictions: restrictions as any,
+        metricsManuallyEdited: true,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });

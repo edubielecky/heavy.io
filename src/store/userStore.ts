@@ -30,6 +30,7 @@ export interface UserProfile {
   equipmentEnvironment?: 'commercial' | 'condo' | 'home_dumbbells';
   physicalRestrictions?: ('shoulders' | 'lower_back' | 'knees' | 'none')[];
   createdAt?: string;
+  metricsManuallyEdited?: boolean;
 }
 
 interface UserStoreState {
@@ -60,12 +61,7 @@ export const useUserStore = create<UserStoreState>()(
       isGuest: false,
       userFlow: 'existing_user',
       onboardingTrack: null,
-      profile: {
-        experienceLevel: 'intermediario',
-        preferredDaysPerWeek: 4,
-        bodyWeightKg: 80,
-        heightCm: 178,
-      },
+      profile: null,
       preferences: {
         defaultRestSeconds: 90,
         soundEnabled: true,
@@ -94,7 +90,7 @@ export const useUserStore = create<UserStoreState>()(
 
       updateMetrics: (updates: Partial<UserProfile>) => {
         const current = get().profile || {};
-        set({ profile: { ...current, ...updates } });
+        set({ profile: { ...current, ...updates, metricsManuallyEdited: true } });
       },
 
       updatePreferences: (updates: Partial<UserPreferences>) => {
@@ -104,11 +100,27 @@ export const useUserStore = create<UserStoreState>()(
 
       completeOnboarding: (profileData?: Partial<UserProfile>) => {
         const current = get().profile || {};
+        const isAdvanced = profileData?.onboardingTrack === 'advanced';
+        const cleanedCurrent = (isAdvanced && !current.metricsManuallyEdited)
+          ? {
+              ...current,
+              bodyWeightKg: undefined,
+              heightCm: undefined,
+              experienceLevel: undefined,
+              primaryGoal: undefined,
+              musclePriority: undefined,
+              biologicalSex: undefined,
+              age: undefined,
+              equipmentEnvironment: undefined,
+              physicalRestrictions: undefined,
+            }
+          : current;
+
         set({
           hasCompletedOnboarding: true,
           userFlow: get().isGuest ? 'guest' : 'existing_user',
           profile: {
-            ...current,
+            ...cleanedCurrent,
             ...(profileData || {}),
             createdAt: current.createdAt || new Date().toISOString(),
           },
@@ -119,6 +131,7 @@ export const useUserStore = create<UserStoreState>()(
         set({
           hasCompletedOnboarding: false,
           userFlow: 'new_user',
+          profile: null,
         });
       },
 
