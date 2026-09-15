@@ -1,13 +1,34 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dumbbell, ListPlus, History, Trophy } from 'lucide-react-native';
 import Theme from '../../src/theme/theme';
+import { auth, onAuthStateChanged } from '../../src/services/firebase';
+import { useUserStore } from '../../src/store/userStore';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(8, insets.bottom);
   const barHeight = 54 + bottomPadding;
+
+  const { isGuest, hasCompletedOnboarding } = useUserStore();
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
+  const [authInitialized, setAuthInitialized] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      setCurrentUser(user);
+      setAuthInitialized(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isAuthenticated = Boolean(currentUser || (isGuest && hasCompletedOnboarding));
+
+  // Bloqueio rigoroso de segurança: atleta deslogado não pode visualizar as tabs
+  if (authInitialized && !isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs

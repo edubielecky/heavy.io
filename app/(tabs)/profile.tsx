@@ -422,9 +422,10 @@ export default function AthleteControlCenterScreen() {
     setIsLoggingOut(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     
-    // 1. Apaga qualquer treino ativo ou rascunho em andamento
+    // 1. Apaga qualquer treino ativo ou rascunho em andamento e encerra cronômetros
     try {
       discardActiveSession();
+      useWorkoutStore.getState().stopRestTimer();
     } catch (err) {
       console.warn('Erro ao descartar sessão de treino ativa no logout:', err);
     }
@@ -448,11 +449,11 @@ export default function AthleteControlCenterScreen() {
     setIsLogoutModalOpen(false);
     setIsLoggingOut(false);
 
-    // 4. Redireciona com segurança para a tela inicial (index / login)
+    // 4. Redireciona com segurança diretamente para a tela de login (sem reter histórico da sessão)
     if (router.canDismiss()) {
       router.dismissAll();
     }
-    router.replace('/');
+    router.replace('/login' as any);
   };
 
   const getExperienceLabel = (exp?: string) => {
