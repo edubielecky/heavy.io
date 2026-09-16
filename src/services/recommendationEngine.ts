@@ -1417,10 +1417,34 @@ Retorne ESTRITAMENTE o seguinte objeto JSON:
  * respeitando rigorosamente as restrições articulares, o ambiente de equipamento da academia
  * e opcionalmente um filtro específico de aparelho selecionado pelo usuário.
  */
+export type SwapReasonCategory =
+  | 'missing_equipment' // Aparelho ocupado ou ausente na academia
+  | 'pain_discomfort'   // Dor ou incômodo articular ao executar
+  | 'dislike_exercise'  // Pouco estímulo ou não gosta do exercício
+  | 'high_fatigue'      // Fadiga muito alta / Desejo de isolar mais
+  | 'custom';           // Outro motivo
+
+export interface SwapExerciseFeedback {
+  category: SwapReasonCategory;
+  details?: string;
+}
+
+export interface AiBiomechanicSubstituteResult {
+  substitute: Exercise;
+  activationExplanation: string;
+  reasonAddressed?: string;
+}
+
+/**
+ * Busca substitutos biomecanicamente equivalentes para um exercício,
+ * respeitando rigorosamente as restrições articulares, o ambiente de equipamento da academia,
+ * filtro de equipamento e o motivo/feedback específico de substituição do usuário.
+ */
 export const getBiomechanicSubstitutes = (
   currentExerciseId: string,
   inputs?: Partial<GuidedInputs>,
-  equipmentFilter?: Equipment | 'all'
+  equipmentFilter?: Equipment | 'all',
+  feedback?: SwapExerciseFeedback
 ): Exercise[] => {
   const effectiveInputs: GuidedInputs = {
     frequency: inputs?.frequency || 4,
@@ -1440,9 +1464,31 @@ export const getBiomechanicSubstitutes = (
   const current = available.find(e => e.id === currentExerciseId) ||
     SEED_EXERCISES.find(e => e.id === currentExerciseId);
 
+  const detailsLower = (feedback?.details || '').toLowerCase();
+
+  // Mapeia restrições inferidas pelo motivo de dor/desconforto articular
+  const dynamicExcludedIds = new Set<string>();
+  if (feedback?.category === 'pain_discomfort') {
+    const isShoulderIssue = detailsLower.includes('ombro') || detailsLower.includes('cotovelo') || detailsLower.includes('pulso') || detailsLower.includes('peito') || current?.targetMuscle === 'ombros' || current?.targetMuscle === 'peito';
+    const isLowerBackIssue = detailsLower.includes('lombar') || detailsLower.includes('coluna') || detailsLower.includes('costas') || current?.movementPattern === 'hinge';
+    const isKneeIssue = detailsLower.includes('joelho') || detailsLower.includes('patel') || current?.movementPattern === 'squat' || current?.movementPattern === 'lunge';
+
+    if (isShoulderIssue && CONTRAINDICATED_EXERCISES.shoulders) {
+      CONTRAINDICATED_EXERCISES.shoulders.forEach(id => dynamicExcludedIds.add(id));
+    }
+    if (isLowerBackIssue && CONTRAINDICATED_EXERCISES.lower_back) {
+      CONTRAINDICATED_EXERCISES.lower_back.forEach(id => dynamicExcludedIds.add(id));
+    }
+    if (isKneeIssue && CONTRAINDICATED_EXERCISES.knees) {
+      CONTRAINDICATED_EXERCISES.knees.forEach(id => dynamicExcludedIds.add(id));
+    }
+  }
+
   let candidates = available.filter(ex => {
     if (ex.id === currentExerciseId) return false;
+    if (dynamicExcludedIds.has(ex.id)) return false;
 
+    // Filtro estático de equipamento caso o usuário tenha clicado numa pílula
     if (equipmentFilter && equipmentFilter !== 'all') {
       if (equipmentFilter === 'machine') {
         if (ex.equipment !== 'machine' && ex.equipment !== 'cable' && ex.equipment !== 'smith') {
@@ -1453,36 +1499,91 @@ export const getBiomechanicSubstitutes = (
       }
     }
 
+    // Se o motivo for falta do equipamento atual, exclui o equipamento idêntico do atual
+    if (feedback?.category === 'missing_equipment' && current) {
+      if (current.equipment === 'machine' && ex.equipment === 'machine') {
+        // Se ambos são máquinas genéricas, tenta evitar se houver opções livres/cabos
+        // mantido para filtragem de ranking
+      }
+      if (detailsLower.includes('smith') && ex.equipment === 'smith') return false;
+      if ((detailsLower.includes('cabo') || detailsLower.includes('polia')) && ex.equipment === 'cable') return false;
+      if (detailsLower.includes('halter') && ex.equipment === 'dumbbell') return false;
+      if (detailsLower.includes('barra') && ex.equipment === 'barbell') return false;
+    }
+
     const isSameMuscle = current ? ex.targetMuscle === current.targetMuscle : true;
     const isSamePattern = current ? ex.movementPattern === current.movementPattern : false;
 
     return isSameMuscle || isSamePattern;
   });
 
-  if (current?.mechanic === 'compound') {
-    candidates.sort((a, b) => {
-      if (a.mechanic === 'compound' && b.mechanic !== 'compound') return -1;
-      if (a.mechanic !== 'compound' && b.mechanic === 'compound') return 1;
-      return 0;
-    });
-  }
+  // Ranking com base no feedback e biomecânica
+  candidates.sort((a, b) => {
+    let scoreA = 0;
+    let scoreB = 0;
+
+    // Critério 1: Músculo exatamente igual
+    if (current) {
+      if (a.targetMuscle === current.targetMuscle) scoreA += 50;
+      if (b.targetMuscle === current.targetMuscle) scoreB += 50;
+      if (a.movementPattern === current.movementPattern) scoreA += 25;
+      if (b.movementPattern === current.movementPattern) scoreB += 25;
+    }
+
+    // Heurísticas por motivo de substituição
+    if (feedback?.category === 'missing_equipment' && current) {
+      // Prioriza equipamentos alternativos ao atual
+      if (a.equipment !== current.equipment) scoreA += 30;
+      if (b.equipment !== current.equipment) scoreB += 30;
+      // Halteres e cabos têm alta disponibilidade em qualquer academia
+      if (a.equipment === 'dumbbell' || a.equipment === 'cable') scoreA += 15;
+      if (b.equipment === 'dumbbell' || b.equipment === 'cable') scoreB += 15;
+    } else if (feedback?.category === 'pain_discomfort') {
+      // Prioriza halteres (trajetória livre e pegada neutra) e cabos (tensão contínua sem tranco articular)
+      if (a.equipment === 'dumbbell' || a.equipment === 'cable') scoreA += 25;
+      if (b.equipment === 'dumbbell' || b.equipment === 'cable') scoreB += 25;
+      // Evita barras fixas se o atual causou dor
+      if (a.equipment === 'barbell') scoreA -= 20;
+      if (b.equipment === 'barbell') scoreB -= 20;
+      // Prioriza variantes apoiadas (chest-supported) ou com encosto estável
+      if (a.name.toLowerCase().includes('incline') || a.name.toLowerCase().includes('seated') || a.name.toLowerCase().includes('apoiad')) scoreA += 15;
+      if (b.name.toLowerCase().includes('incline') || b.name.toLowerCase().includes('seated') || b.name.toLowerCase().includes('apoiad')) scoreB += 15;
+    } else if (feedback?.category === 'high_fatigue') {
+      // Prioriza isoladores e máquinas com apoio estabilizador
+      if (a.mechanic === 'isolation') scoreA += 30;
+      if (b.mechanic === 'isolation') scoreB += 30;
+      if (a.equipment === 'machine' || a.equipment === 'cable') scoreA += 20;
+      if (b.equipment === 'machine' || b.equipment === 'cable') scoreB += 20;
+      if (a.equipment === 'barbell' && a.mechanic === 'compound') scoreA -= 25;
+      if (b.equipment === 'barbell' && b.mechanic === 'compound') scoreB -= 25;
+    } else if (feedback?.category === 'dislike_exercise' && current) {
+      // Prioriza equipamento e dinâmica diferente do exercício odiado
+      if (a.equipment !== current.equipment) scoreA += 30;
+      if (b.equipment !== current.equipment) scoreB += 30;
+    } else {
+      // Padrão: se o original for composto, prioriza composto
+      if (current?.mechanic === 'compound') {
+        if (a.mechanic === 'compound') scoreA += 15;
+        if (b.mechanic === 'compound') scoreB += 15;
+      }
+    }
+
+    return scoreB - scoreA;
+  });
 
   return candidates;
 };
 
-export interface AiBiomechanicSubstituteResult {
-  substitute: Exercise;
-  activationExplanation: string;
-}
-
 /**
  * Consulta a IA Gemini para escolher, dentre os substitutos disponíveis,
- * aquele que rigorosamente reproduz a mesma ativação neuromuscular, ângulo
- * de trabalho das fibras e curva de tensão mecânica do exercício original.
+ * aquele que rigorosamente responde ao motivo informado pelo atleta
+ * (falta de aparelho, dor/desconforto articular, baixa adesão, fadiga),
+ * preservando a ativação neuromuscular e vetor de sobrecarga das fibras.
  */
 export async function getAiBiomechanicSubstitute(
   currentExercise: { exerciseId?: string; exerciseName: string },
   inputs?: Partial<GuidedInputs>,
+  feedback?: SwapExerciseFeedback,
   options?: { apiKey?: string; timeoutMs?: number }
 ): Promise<AiBiomechanicSubstituteResult | null> {
   const effectiveInputs: GuidedInputs = {
@@ -1504,7 +1605,7 @@ export async function getAiBiomechanicSubstitute(
   const current = available.find(e => e.id === currentId) ||
     SEED_EXERCISES.find(e => e.id === currentId || e.name.toLowerCase() === currentExercise.exerciseName.toLowerCase());
 
-  const rawCandidates = getBiomechanicSubstitutes(currentId, effectiveInputs, 'all');
+  const rawCandidates = getBiomechanicSubstitutes(currentId, effectiveInputs, 'all', feedback);
   if (rawCandidates.length === 0) return null;
 
   // Limita a até 15 candidatos para síntese ágil da IA
@@ -1512,38 +1613,72 @@ export async function getAiBiomechanicSubstitute(
 
   const apiKey = (options?.apiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim();
 
-  // Se não houver chave disponível, usa o melhor candidato biomecânico local
-  if (apiKey.length < 10) {
-    const top = candidates[0];
+  // Helper para gerar explicação contextual precisa para o fallback local
+  const buildFallbackResult = (selected: Exercise): AiBiomechanicSubstituteResult => {
+    let reasonText = `Substituto equivalente para manter a intensidade do treino no grupo ${selected.targetMuscle}.`;
+
+    if (feedback?.category === 'missing_equipment') {
+      reasonText = `Substituído por ${selected.equipment === 'dumbbell' ? 'Halteres' : selected.equipment === 'cable' ? 'Cabos' : selected.equipment === 'barbell' ? 'Barra' : 'aparelho alternativo'}, contornando a falta do equipamento original sem perder a ativação.`;
+    } else if (feedback?.category === 'pain_discomfort') {
+      reasonText = `Variante biomecanicamente mais confortável com menor estresse articular e alinhamento neutro para ${selected.targetMuscle}.`;
+    } else if (feedback?.category === 'high_fatigue') {
+      reasonText = `Alternativa com menor demanda estabilizadora e fadiga sistêmica, mantendo o estímulo isolado no músculo.`;
+    } else if (feedback?.category === 'dislike_exercise') {
+      reasonText = `Variação com curva de resistência e dinâmica alternativa para máxima resposta hipertrófica.`;
+    } else if (feedback?.details) {
+      reasonText = `Alternativa selecionada considerando sua observação: "${feedback.details}".`;
+    }
+
     return {
-      substitute: top,
-      activationExplanation: `Exercício biomecanicamente compatível com sobrecarga direta no grupo ${top.targetMuscle}.`,
+      substitute: selected,
+      activationExplanation: `Mesmo padrão de movimento (${selected.movementPattern}) com sobrecarga mecânica direta em ${selected.targetMuscle}.`,
+      reasonAddressed: reasonText,
     };
+  };
+
+  // Se não houver chave disponível, usa o melhor candidato biomecânico local com as heurísticas
+  if (apiKey.length < 10) {
+    return buildFallbackResult(candidates[0]);
   }
 
+  const reasonDescriptionMap: Record<SwapReasonCategory, string> = {
+    missing_equipment: 'O atleta NÃO tem o equipamento do exercício disponível na academia (ou está ocupado/quebrado). Priorize halteres, polias/cabos ou barras livres.',
+    pain_discomfort: 'O atleta está sentindo DOR ou DESCONFORTO ARTICULAR ao realizar o exercício. É mandatório selecionar uma alternativa com trajetória mais segura, pegada neutra ou apoio externo que elimine a dor.',
+    dislike_exercise: 'O atleta NÃO gosta deste exercício ou sente pouca conexão neuromuscular. Selecione uma variação com perfil de tensão diferente e excelente adesão.',
+    high_fatigue: 'O atleta está com fadiga sistêmica/lombar excessiva. Priorize uma opção mais isolada, apoiada ou com máquina estável.',
+    custom: 'O atleta tem uma necessidade específica de substituição.',
+  };
+
+  const reasonHeader = feedback?.category ? reasonDescriptionMap[feedback.category] : '';
+  const detailsHeader = feedback?.details ? `Observações do atleta: "${feedback.details}"` : '';
+
   const systemInstruction = `Você é o Diretor Técnico e Biomecânico do heavy.io.
-Sua especialidade é cinesiologia, eletromiografia (EMG), curvas de resistência e seleção cirúrgica de substitutos biomecânicos.
-Ao trocar um exercício, selecione o substituto que tenha a rigorosa mesma ativação neuromuscular, ângulo de trabalho das fibras e perfil de tensão mecânica.
+Sua especialidade é cinesiologia aplicada, eletromiografia (EMG), curvas de resistência e seleção cirúrgica de substitutos biomecânicos para atletas de força.
+Ao trocar um exercício, responda à queixa do atleta e garanta a mesma ativação neuromuscular do músculo-alvo.
 Responda ESTRITAMENTE em formato JSON válido, sem tags markdown e sem texto extra.`;
 
   const candidatesListText = candidates.map(c => `- ${c.id}: ${c.name} (equipamento: ${c.equipment}, mecânica: ${c.mechanic}, músculo: ${c.targetMuscle})`).join('\n');
 
-  const prompt = `O atleta precisa trocar o seguinte exercício da sua planilha:
+  const prompt = `O atleta precisa trocar o seguinte exercício da planilha:
 - Exercício atual: "${current?.name || currentExercise.exerciseName}"
 - Músculo-alvo: ${current?.targetMuscle || 'mesmo grupo'}
-- Padrão de movimento: ${current?.movementPattern || 'equivalente'}
-- Equipamento disponível: ${effectiveInputs.equipment}
-- Restrições ortopédicas: ${effectiveInputs.restrictions.join(', ')}
+- Equipamento atual: ${current?.equipment || 'indefinido'}
+- Padrão biomecânico: ${current?.movementPattern || 'equivalente'}
+
+MOTIVO DA TROCA INFORMADO PELO ATLETA:
+${reasonHeader}
+${detailsHeader}
 
 Exercícios candidatos disponíveis no sistema:
 ${candidatesListText}
 
-Selecione o candidato que ofereça a ativação neuromuscular e vetor de sobrecarga mais idêntico.
+Selecione o candidato ideal que solucione o motivo informado pelo atleta e mantenha a maior equivalência de sobrecarga no músculo-alvo.
 Retorne ESTRITAMENTE o seguinte JSON:
 {
   "selectedExerciseId": string,
   "selectedExerciseName": string,
-  "activationExplanation": string (1 frase técnica em português explicando a equivalência de ativação das fibras e perfil de tensão)
+  "reasonAddressed": string (1 frase técnica explicando como este substituto resolve a queixa de dor, falta de aparelho ou preferência do atleta),
+  "activationExplanation": string (1 frase técnica explicando a ativação das fibras musculares e perfil de tensão)
 }`;
 
   try {
@@ -1568,17 +1703,14 @@ Retorne ESTRITAMENTE o seguinte JSON:
         return {
           substitute: match,
           activationExplanation: parsed.activationExplanation || `Mesma ativação neuromuscular no grupamento ${match.targetMuscle}.`,
+          reasonAddressed: parsed.reasonAddressed || buildFallbackResult(match).reasonAddressed,
         };
       }
     }
   } catch (err) {
-    console.warn('[heavy.io] Falha na IA de substituição, usando melhor candidato local:', err);
+    console.warn('[heavy.io] Falha na IA de substituição, usando melhor candidato local com heurística:', err);
   }
 
-  // Fallback seguro de precisão
-  const top = candidates[0];
-  return {
-    substitute: top,
-    activationExplanation: `Mesmo padrão de movimento e ativação mecânica prioritária para ${top.targetMuscle}.`,
-  };
+  // Fallback seguro de precisão com heurísticas preditivas locais
+  return buildFallbackResult(candidates[0]);
 }

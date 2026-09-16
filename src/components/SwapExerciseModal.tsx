@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { X, Search, RefreshCw, Dumbbell, ShieldCheck, Sparkles, Check } from 'lucide-react-native';
+import { X, Search, RefreshCw, Dumbbell, ShieldCheck, Sparkles, Check, Ban, Activity, ThumbsDown, BatteryLow, SlidersHorizontal, ArrowLeft } from 'lucide-react-native';
 import Theme from '../theme/theme';
 import { Exercise, Equipment } from '../types/workout';
 import {
@@ -21,6 +21,8 @@ import {
   getBiomechanicSubstitutes,
   getAiBiomechanicSubstitute,
   AiBiomechanicSubstituteResult,
+  SwapReasonCategory,
+  SwapExerciseFeedback,
 } from '../services/recommendationEngine';
 import { useUserStore } from '../store/userStore';
 import { useResponsive } from '../hooks/useResponsive';
@@ -38,6 +40,50 @@ interface SwapExerciseModalProps {
   onSelectSubstitute: (substitute: Exercise) => void;
 }
 
+const SWAP_REASONS: {
+  id: SwapReasonCategory;
+  label: string;
+  sub: string;
+  placeholder: string;
+  icon: React.ComponentType<{ size: number; color: string }>;
+}[] = [
+  {
+    id: 'missing_equipment',
+    label: 'Sem o aparelho',
+    sub: 'Ocupado ou indisponível',
+    placeholder: 'Opcional: O que tem livre? (ex: só halteres e banco)...',
+    icon: Ban,
+  },
+  {
+    id: 'pain_discomfort',
+    label: 'Dor ou desconforto',
+    sub: 'Alívio articular',
+    placeholder: 'Opcional: Onde dói? (ex: ombro ao descer, lombar)...',
+    icon: Activity,
+  },
+  {
+    id: 'dislike_exercise',
+    label: 'Pouco estímulo',
+    sub: 'Não gosto / Baixo foco',
+    placeholder: 'Opcional: O que prefere? (ex: prefiro halteres ou cabos)...',
+    icon: ThumbsDown,
+  },
+  {
+    id: 'high_fatigue',
+    label: 'Fadiga excessiva',
+    sub: 'Quero isolar mais',
+    placeholder: 'Opcional: ex: poupar lombar, preferência por apoio...',
+    icon: BatteryLow,
+  },
+  {
+    id: 'custom',
+    label: 'Outro motivo',
+    sub: 'Personalizado',
+    placeholder: 'Descreva sua necessidade ou preferência para a IA...',
+    icon: SlidersHorizontal,
+  },
+];
+
 export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
   visible,
   onClose,
@@ -48,6 +94,8 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
   const { isFoldable, modalMaxWidth } = useResponsive();
   const [searchTerm, setSearchTerm] = useState('');
   const [equipmentFilter, setEquipmentFilter] = useState<Equipment | 'all'>('all');
+  const [selectedReason, setSelectedReason] = useState<SwapReasonCategory | null>('missing_equipment');
+  const [reasonDetails, setReasonDetails] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<AiBiomechanicSubstituteResult | null>(null);
 
@@ -57,9 +105,19 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
   useEffect(() => {
     setAiResult(null);
     setIsAiLoading(false);
+    setSelectedReason('missing_equipment');
+    setReasonDetails('');
   }, [currentExercise?.exerciseId]);
 
-  // Busca os substitutos compatíveis cruzando biomecânica e disponibilidade de aparelhos
+  const currentFeedback = useMemo<SwapExerciseFeedback | undefined>(() => {
+    if (!selectedReason && !reasonDetails.trim()) return undefined;
+    return {
+      category: selectedReason || 'custom',
+      details: reasonDetails.trim() || undefined,
+    };
+  }, [selectedReason, reasonDetails]);
+
+  // Busca os substitutos compatíveis cruzando biomecânica, aparelhos e o motivo do atleta
   const substitutes = useMemo(() => {
     if (!currentExercise) return [];
     const effectiveInputs: Partial<GuidedInputs> = {
@@ -67,8 +125,8 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
       restrictions: guidedInputs?.restrictions || userProfile?.physicalRestrictions || [],
       ...guidedInputs,
     };
-    return getBiomechanicSubstitutes(currentExercise.exerciseId, effectiveInputs, equipmentFilter);
-  }, [currentExercise, guidedInputs, userProfile, equipmentFilter]);
+    return getBiomechanicSubstitutes(currentExercise.exerciseId, effectiveInputs, equipmentFilter, currentFeedback);
+  }, [currentExercise, guidedInputs, userProfile, equipmentFilter, currentFeedback]);
 
   // Filtro de busca textual adicional
   const filteredSubstitutes = useMemo(() => {
@@ -87,7 +145,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
     onClose();
   };
 
-  const handleRequestAiSubstitute = async () => {
+  const handleRequestAiSubstitute = async (categoryOverride?: SwapReasonCategory) => {
     if (!currentExercise) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsAiLoading(true);
@@ -97,7 +155,12 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
         restrictions: guidedInputs?.restrictions || userProfile?.physicalRestrictions || [],
         ...guidedInputs,
       };
-      const result = await getAiBiomechanicSubstitute(currentExercise, effectiveInputs);
+      const cat = categoryOverride || selectedReason || 'custom';
+      const feedbackToSend: SwapExerciseFeedback = {
+        category: cat,
+        details: reasonDetails.trim() || undefined,
+      };
+      const result = await getAiBiomechanicSubstitute(currentExercise, effectiveInputs, feedbackToSend);
       if (result) {
         setAiResult(result);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -205,40 +268,98 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
             ListHeaderComponent={
               <View style={styles.aiSectionContainer}>
                 {!aiResult ? (
-                  <TouchableOpacity
-                    style={styles.aiActionBanner}
-                    onPress={handleRequestAiSubstitute}
-                    disabled={isAiLoading}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.aiActionHeader}>
-                      <View style={styles.aiActionIconBox}>
-                        {isAiLoading ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Sparkles size={16} color="#FFFFFF" />
-                        )}
+                  <View style={styles.aiFormCard}>
+                    <View style={styles.aiFormHeader}>
+                      <View style={styles.aiFormIconBox}>
+                        <Sparkles size={16} color="#FFFFFF" />
                       </View>
-                      <View style={styles.aiActionTextArea}>
+                      <View style={styles.aiFormHeaderText}>
                         <View style={styles.aiActionBadgeRow}>
-                          <Text style={styles.aiActionBadge}>CINESIOLOGIA & ATIVAÇÃO</Text>
+                          <Text style={styles.aiActionBadge}>CINESIOLOGIA & IA</Text>
                         </View>
-                        <Text style={styles.aiActionTitle}>
-                          {isAiLoading ? 'Analisando ativação neuromuscular...' : 'Trocar com IA'}
-                        </Text>
-                        <Text style={styles.aiActionSub}>
-                          {isAiLoading
-                            ? 'Calculando equivalência de fibras e curvas de tensão...'
-                            : 'A IA escolhe o substituto ideal com a mesma ativação muscular.'}
+                        <Text style={styles.aiFormTitle}>Por que deseja trocar?</Text>
+                        <Text style={styles.aiFormSub}>
+                          Selecione o motivo para a IA escolher o substituto exato.
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.aiActionPill}>
-                      <Text style={styles.aiActionPillText}>
-                        {isAiLoading ? '...' : 'Sugerir'}
-                      </Text>
+
+                    {/* Chips de motivos */}
+                    <View style={styles.reasonsGrid}>
+                      {SWAP_REASONS.map(reason => {
+                        const isSelected = selectedReason === reason.id;
+                        const IconComponent = reason.icon;
+                        return (
+                          <TouchableOpacity
+                            key={reason.id}
+                            style={[styles.reasonChip, isSelected && styles.reasonChipActive]}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setSelectedReason(reason.id);
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <View style={styles.reasonChipTop}>
+                              <IconComponent
+                                size={13}
+                                color={isSelected ? '#FFFFFF' : '#A1A1AA'}
+                              />
+                              <Text
+                                style={[
+                                  styles.reasonChipTitle,
+                                  isSelected && styles.reasonChipTitleActive,
+                                ]}
+                              >
+                                {reason.label}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[styles.reasonChipSub, isSelected && styles.reasonChipSubActive]}
+                              numberOfLines={1}
+                            >
+                              {reason.sub}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  </TouchableOpacity>
+
+                    {/* Campo de detalhes adicionais */}
+                    <View style={styles.detailsInputContainer}>
+                      <TextInput
+                        style={styles.detailsInput}
+                        placeholder={
+                          SWAP_REASONS.find(r => r.id === selectedReason)?.placeholder ||
+                          'Opcional: detalhes adicionais...'
+                        }
+                        placeholderTextColor="#71717A"
+                        value={reasonDetails}
+                        onChangeText={setReasonDetails}
+                        maxLength={120}
+                        returnKeyType="done"
+                      />
+                    </View>
+
+                    {/* Botão de Ação IA */}
+                    <TouchableOpacity
+                      style={[styles.aiSubmitBtn, isAiLoading && styles.aiSubmitBtnDisabled]}
+                      onPress={() => handleRequestAiSubstitute()}
+                      disabled={isAiLoading}
+                      activeOpacity={0.85}
+                    >
+                      {isAiLoading ? (
+                        <>
+                          <ActivityIndicator size="small" color="#09090B" />
+                          <Text style={styles.aiSubmitBtnText}>Calculando equivalência biomecânica...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={15} color="#09090B" />
+                          <Text style={styles.aiSubmitBtnText}>Analisar e Sugerir com IA</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View style={styles.aiResultCard}>
                     <View style={styles.aiResultTop}>
@@ -247,7 +368,7 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
                         <Text style={styles.aiResultBadgeText}>SUGESTÃO DA IA • MESMA ATIVAÇÃO</Text>
                       </View>
                       <TouchableOpacity
-                        onPress={handleRequestAiSubstitute}
+                        onPress={() => handleRequestAiSubstitute()}
                         disabled={isAiLoading}
                         style={styles.aiRegenerateBtn}
                         activeOpacity={0.7}
@@ -288,6 +409,16 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
                       </View>
                     </View>
 
+                    {aiResult.reasonAddressed && (
+                      <View style={styles.aiReasonAddressedBox}>
+                        <View style={styles.aiReasonAddressedHeader}>
+                          <ShieldCheck size={12} color="#10B981" />
+                          <Text style={styles.aiReasonAddressedLabel}>COMO RESOLVE SEU MOTIVO</Text>
+                        </View>
+                        <Text style={styles.aiReasonAddressedText}>{aiResult.reasonAddressed}</Text>
+                      </View>
+                    )}
+
                     <View style={styles.aiExplanationBox}>
                       <Text style={styles.aiExplanationLabel}>EQUIVALÊNCIA BIOMECÂNICA:</Text>
                       <Text style={styles.aiExplanationText}>{aiResult.activationExplanation}</Text>
@@ -299,7 +430,19 @@ export const SwapExerciseModal: React.FC<SwapExerciseModalProps> = ({
                       activeOpacity={0.85}
                     >
                       <Check size={14} color="#09090B" />
-                      <Text style={styles.aiApplyBtnText}>Aplicar Troca com IA</Text>
+                      <Text style={styles.aiApplyBtnText}>Aplicar Troca no Treino</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.aiChangeReasonBtn}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAiResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <SlidersHorizontal size={13} color="#A1A1AA" />
+                      <Text style={styles.aiChangeReasonBtnText}>Alterar motivo da troca</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -592,34 +735,32 @@ const styles = StyleSheet.create({
   aiSectionContainer: {
     marginBottom: 10,
   },
-  aiActionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  aiFormCard: {
     backgroundColor: '#121215',
     borderWidth: 1,
-    borderColor: '#3F3F46',
+    borderColor: '#27272A',
     borderRadius: Theme.borderRadius.md,
-    padding: 12,
+    padding: 14,
     marginBottom: 4,
   },
-  aiActionHeader: {
+  aiFormHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    alignItems: 'flex-start',
     gap: 10,
+    marginBottom: 12,
   },
-  aiActionIconBox: {
-    width: 34,
-    height: 34,
+  aiFormIconBox: {
+    width: 32,
+    height: 32,
     borderRadius: 8,
     backgroundColor: '#18181B',
     borderWidth: 1,
     borderColor: '#27272A',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
-  aiActionTextArea: {
+  aiFormHeaderText: {
     flex: 1,
   },
   aiActionBadgeRow: {
@@ -633,30 +774,90 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
     letterSpacing: 0.6,
   },
-  aiActionTitle: {
+  aiFormTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.2,
   },
-  aiActionSub: {
+  aiFormSub: {
     fontSize: 11,
     color: '#71717A',
     marginTop: 2,
-    lineHeight: 14,
+    lineHeight: 15,
   },
-  aiActionPill: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 6,
-    marginLeft: 8,
+  reasonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
   },
-  aiActionPillText: {
+  reasonChip: {
+    width: '48.5%',
+    backgroundColor: '#18181B',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  reasonChipActive: {
+    backgroundColor: '#27272A',
+    borderColor: '#FFFFFF',
+  },
+  reasonChipTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  reasonChipTitle: {
     fontSize: 11,
+    fontWeight: '700',
+    color: '#D4D4D8',
+  },
+  reasonChipTitleActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  reasonChipSub: {
+    fontSize: 10,
+    color: '#71717A',
+  },
+  reasonChipSubActive: {
+    color: '#A1A1AA',
+  },
+  detailsInputContainer: {
+    backgroundColor: '#18181B',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27272A',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  detailsInput: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    padding: 0,
+  },
+  aiSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  aiSubmitBtnDisabled: {
+    opacity: 0.7,
+  },
+  aiSubmitBtnText: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#09090B',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   aiResultCard: {
     backgroundColor: '#18181B',
@@ -710,13 +911,40 @@ const styles = StyleSheet.create({
     color: '#71717A',
     marginTop: 1,
   },
+  aiReasonAddressedBox: {
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 10,
+  },
+  aiReasonAddressedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  aiReasonAddressedLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.6,
+  },
+  aiReasonAddressedText: {
+    fontSize: 12,
+    color: '#E4E4E7',
+    lineHeight: 16,
+  },
   aiExplanationBox: {
     backgroundColor: '#121215',
     borderWidth: 1,
     borderColor: '#27272A',
     borderRadius: 6,
     padding: 10,
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 12,
   },
   aiExplanationLabel: {
@@ -745,6 +973,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#09090B',
     letterSpacing: 0.2,
+  },
+  aiChangeReasonBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#121215',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  aiChangeReasonBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#A1A1AA',
   },
   listDividerRow: {
     flexDirection: 'row',
