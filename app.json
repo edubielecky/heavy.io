@@ -76,6 +76,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "49360989-746b-45fa-8723-c8d1ad309361"
+      }
+    },
+    "owner": "bielecky"
   }
 }
