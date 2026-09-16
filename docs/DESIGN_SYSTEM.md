@@ -67,9 +67,27 @@ export const Theme = {
 
 ---
 
+## 📱 Design Responsivo & Dispositivos Dobráveis (Foldables)
+
+O **heavy.io** possui arquitetura adaptativa de primeira classe para dispositivos dobráveis (ex: Samsung Galaxy Z Fold, Google Pixel 9 Pro Fold) e tablets através do hook [`useResponsive`](file:///c:/Users/Eduardo/Desktop/exemplo/heavy.io/src/hooks/useResponsive.ts):
+
+1. **Ergonomia dos Polegares na Barra Inferior**:
+   - Em telas amplas desdobradas ($\ge 600\text{dp}$), a barra de navegação inferior (`tabBarMaxWidth`) é travada em $560\text{dp}$ e centralizada, evitando que os botões fiquem isolados nos extremos da tela.
+2. **Largura de Leitura & Dashboard Centralizado**:
+   - O conteúdo central (`maxContentWidth`) possui limite máximo de $840\text{dp}$, preservando a proporção de instrumento mecânico e evitando textos excessivamente esticados.
+3. **Grades Dinâmicas**:
+   - Catálogos de exercícios, seletores de rotinas e listas de histórico adotam 2 colunas no modo desdobrado/tablet e 1 coluna em celulares compactos.
+4. **Telas Externas Estreitas (Cover Screen)**:
+   - Em telas frontais fechadas ($< 380\text{dp}$), os espaçamentos horizontais são ajustados cirurgicamente para $12\text{dp}$, garantindo legibilidade perfeita de cargas e repetições sem cortes.
+5. **Modais Elegantes**:
+   - Modais de substituição, finalização e criação de exercícios utilizam `modalMaxWidth: 600dp` com backdrop suave e centralização.
+
+---
+
 ## 🚫 O que NÃO fazer no heavy.io
 
 - ❌ Não usar cores neon fluorescentes (`#00FF00`, `#CCFF00`, rosa choque, azul elétrico brilhante).
 - ❌ Não usar sombras coloridas difusas (`shadowColor: neonColor` com `shadowOpacity: 0.8`).
 - ❌ Não usar ilustrações cartoonizadas ou elementos lúdicos estilo infantil.
 - ❌ Não poluir telas com banners promocionais ou confetes animados; a celebração de um PR é sutil e elegante.
+

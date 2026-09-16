@@ -86,10 +86,4 @@ npx expo config --type prebuild
 
 # 3. Teste de empacotamento completo do Metro com cache limpo
 npx expo export --platform web --clear
-
-# 4. Execução dos testes automatizados de persistência e regras de negócio
-python scratch/test_build_config.py
-python scratch/test_routine_management.py
-python scratch/test_custom_exercises.py
-python scratch/test_health_connect.py
 ```

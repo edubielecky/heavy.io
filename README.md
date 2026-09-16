@@ -40,12 +40,15 @@ O **heavy.io** é um aplicativo mobile de alta performance voltado para atletas 
 
 ### ✨ Funcionalidades Principais
 - 🛡️ **Arquitetura 100% Local-First (SQLite WAL)**: Todas as sessões, séries, cargas e rotinas são gravadas instantaneamente no banco de dados local embarcado (`heavy_io.db`). Latência zero, sem depender de internet.
+- 🤖 **Motor de IA Biomecânica & Substituição por Motivo**: Substitua exercícios em tempo real informando o motivo exato (*equipamento ocupado*, *dor/desconforto articular*, *fadiga/SFR baixo*, *variação de estímulo* ou *falta de tempo*). Inclui justificativa anatômica e cliente Gemini com cascata de fallback resiliente contra erros 503 e operação 100% offline.
+- 🧬 **Modulação Fisiológica por Faixa Etária**: O motor de recomendação ajusta volumes efetivos, descansos estendidos (+15 a +25s), RIR seguro e trajetórias guiadas com suporte torácico para atletas masters (50+ anos) e adultos, preservando tendões e cartilagens.
+- 📱 **Suporte Adaptativo para Dispositivos Dobráveis (Foldables)**: Layout reativo (`useResponsive`) com 2 colunas para Galaxy Z Fold, Pixel Fold e tablets, ergonomia de polegares na barra inferior (560dp) e ajuste para telas externas compactas.
 - ⏱️ **Cronômetro na Tela de Bloqueio & Ongoing Notification**: Acompanhe o descanso sem desbloquear o celular. Adicione $+30\text{s}$ ou pule o descanso diretamente no card fixo de notificação ou Live Activity.
 - 🔁 **Resiliência Ativa & Crash Recovery**: Se o sistema operacional encerrar o app por economia de memória durante o descanso, o treino é recuperado automaticamente ao reabrir.
-- 📈 **Curva de Força & Estimativa de 1RM**: Gráficos biomecânicos de evolução de carga por exercício e cálculo em tempo real de 1RM pela fórmula de Epley.
+- 📈 **Sobrecarga Progressiva & Estimativa de 1RM**: Gestão de progressão dupla (*Double Progression*), gráficos biomecânicos de evolução de carga e cálculo em tempo real de 1RM pela fórmula de Epley.
 - 📋 **Gestão Completa de Fichas (CRUD de Rotinas)**: Crie múltiplas fichas (ex.: *"Treino de Férias"*, *"Ciclo de Força 3x"*), alterne a ficha ativa e reordene exercícios (▲/▼) dentro de qualquer dia sem reiniciar o onboarding.
 - 🛠️ **Criação & Edição de Exercícios Customizados**: Adicione movimentos próprios (`is_custom = 1`) definindo grupos musculares, mecânica, equipamento e instruções, com proteção de integridade dos exercícios do sistema.
-- 🩺 **Integração com Android Health Connect**: Sincronização bidirecional de biometria (peso, altura, passos, calorias) e exportação automática de treinos de força para o ecossistema Android e relógios inteligentes.
+- 🩺 **Camada Unificada de Saúde (Health Connect & Apple Health)**: Sincronização bidirecional de biometria (peso, altura, passos, calorias), coleta de batimentos cardíacos (BPM médio e pico) de smartwatches e exportação automática de treinos de força para Android e iOS.
 - ☁️ **Fila de Sincronização em Nuvem (Sync Queue)**: Enfileiramento offline com envio automático e retry exponencial para o Firebase Firestore quando houver conexão.
 - 🔒 **Wake Lock Inteligente**: Mantém a tela ligada durante a execução das séries e descanso enquanto o treino estiver ativo.
 
@@ -64,13 +67,16 @@ O **heavy.io** é um aplicativo mobile de alta performance voltado para atletas 
 
 ### ✨ Key Features
 - 🛡️ **100% Local-First Architecture (SQLite WAL)**: Workouts, sets, weights, and splits are written instantly to an embedded SQLite database (`heavy_io.db`) with zero latency and full offline capability.
+- 🤖 **Biomechanical AI Engine & Reason-Based Exercise Swap**: Swap exercises on the fly by selecting your real-world reason (*machine busy*, *joint discomfort*, *high fatigue / low SFR*, *muscle variation*, or *time constraint*). Powered by Google Gemini with 503 fallback cascade and 100% offline heuristic fallback.
+- 🧬 **Age-Modulated Physiological Engine**: Recommendation system calibrates effective sets, extended rests (+15s to +25s), safe RIR floors, and chest-supported machine bias for master athletes (50+) and adults to protect tendons and joint health.
+- 📱 **Foldable & Tablet Adaptive Layout**: Responsive dual-column layout (`useResponsive`) for Samsung Galaxy Z Fold, Pixel Fold, and tablets, with centered thumb ergonomics on tab bars (560dp) and narrow cover screen tuning.
 - ⏱️ **Lock Screen Ongoing Notification & Live Activity**: Rest timer runs live on your lock screen with interactive buttons to add $+30\text{s}$ or skip without unlocking your device.
 - 🔁 **Active Session Crash Recovery**: State is serialized periodically. If the OS kills the app in the background while you rest, your workout is instantly restored upon reopening.
-- 📈 **Strength Curves & Real-time 1RM**: Track load progression per exercise with interactive charts and automatic 1RM calculation via the Epley formula:
+- 📈 **Double Progressive Overload & Real-time 1RM**: Guided load and repetition progression, historical volume curves, and automatic 1RM calculation via the Epley formula:
   $$\text{1RM} = \text{Weight} \times \left(1 + \frac{\text{Reps}}{30}\right)$$
 - 📋 **Program & Routine Management (Full Split CRUD)**: Create multiple programs (e.g., *"3-Day Strength Cycle"*, *"Vacation Routine"*), toggle the active program, and add, delete, or reorder exercises (▲/▼) in any day without re-doing onboarding.
 - 🛠️ **Custom Exercise Engine**: Create and edit your own movements (`is_custom = 1`) with muscle targets, mechanics, and equipment, while preserving official seed data integrity.
-- 🩺 **Android Health Connect Integration**: Bidirectional sync for body weight, height, steps, and energy expenditure, plus automatic strength training export for Wear OS / smartwatches.
+- 🩺 **Unified Health Layer (Health Connect & Apple Health)**: Bidirectional sync for body weight, height, steps, and energy expenditure, smartwatch heart rate capture (avg & peak BPM), and automatic strength training export for Android & iOS.
 - ☁️ **Persistent Cloud Sync Queue**: Local FIFO queue with exponential backoff for background synchronization to Firebase Firestore whenever connectivity is available.
 - 🔒 **Smart Workout Wake Lock**: Keeps the display active during workout sessions and restores standard power-saving timeouts once finished.
 
@@ -89,12 +95,15 @@ O **heavy.io** é um aplicativo mobile de alta performance voltado para atletas 
 
 ### ✨ Características Principales
 - 🛡️ **Arquitectura Local-First (SQLite WAL)**: Registro ultra rápido y autónomo en SQLite local (`heavy_io.db`). Funciona 100% sin conexión a internet.
+- 🤖 **Motor de IA Biomecánica & Sustitución por Motivo**: Cambie ejercicios en tiempo real seleccionando el motivo (*equipo ocupado*, *dolor articular*, *fatiga excesiva*, *variación de estímulo* o *falta de tiempo*). Con justificación anatómica y cliente Gemini resiliente contra error 503.
+- 🧬 **Modulación Fisiológica por Edad**: Ajuste automático de volumen, descansos prolongados (+15 a +25s) y protección articular para atletas mayores de 50 años.
+- 📱 **Diseño Adaptativo para Dispositivos Plegables (Foldables)**: Soporte completo para Galaxy Z Fold y tabletas con interfaz de 2 columnas y ergonomía centralizada.
 - ⏱️ **Temporizador en Pantalla de Bloqueo**: Notificación interactiva fija con botones para añadir $+30\text{s}$ o saltar el descanso sin desbloquear el teléfono.
 - 🔁 **Recuperación ante Cierres (Crash Recovery)**: Si el sistema operativo cierra la aplicación en segundo plano por falta de memoria, la sesión se restaura automáticamente.
-- 📈 **Curva de Fuerza y Estimación de 1RM**: Gráficos de progresión y cálculo automático de 1RM mediante la fórmula de Epley.
-- 📋 **Gestión Integral de Rutinas (CRUD de Divisiones)**: Cree múltiples planes (ej.: *"Ciclo de Fuerza 3x"*, *"Rutina de Vacaciones"*), alterne cuál está activo y reordene ejercicios (▲/▼) fácilmente.
-- 🛠️ **Ejercicios Personalizados**: Añada movimientos propios especificando grupo muscular, implemento y mecánica, protegiendo los ejercicios oficiales del sistema.
-- 🩺 **Integración con Android Health Connect**: Sincronización biométrica (peso, altura, pasos, calorías) y exportación de sesiones de fuerza al ecosistema Android.
+- 📈 **Sobrecarga Progresiva y Estimación de 1RM**: Gráficos de progresión y cálculo automático de 1RM mediante la fórmula de Epley.
+- 📋 **Gestión Integral de Rutinas (CRUD de Divisiones)**: Cree múltiples planes, alterne cuál está activo y reordene ejercicios (▲/▼) fácilmente.
+- 🛠️ **Ejercicios Personalizados**: Añada movimientos propios especificando grupo muscular, implemento y mecánica.
+- 🩺 **Capa Unificada de Salud (Health Connect & Apple Health)**: Sincronización biométrica (peso, altura, pulso cardíaco de smartwatches) y exportación de sesiones de fuerza.
 - ☁️ **Cola de Sincronización en Segundo Plano**: Transmisión asíncrona a Firebase Firestore con reintentos automáticos.
 - 🔒 **Pantalla Siempre Activa (Wake Lock)**: Evita que la pantalla se apague durante el entrenamiento activo.
 
@@ -107,14 +116,17 @@ O **heavy.io** é um aplicativo mobile de alta performance voltado para atletas 
 
 ### ✨ 核心功能
 - 🛡️ **100% 离线优先架构 (SQLite WAL)**: 所有训练动作、组数、重量与计划均直接写入本地 SQLite 数据库 (`heavy_io.db`)，零延迟，无网络依赖。
+- 🤖 **生物力学 AI 引擎与按因替换动作**: 支持根据实际原因（器械被占、关节疼痛不适、中枢疲劳/SFR过低、寻求肌纤维变化、时间紧迫）智能平替动作，搭载 Gemini 503 弹性降级机制与全离线回退算法。
+- 🧬 **按年龄段生理学调控**: 为高龄/大师级训练者（50+岁）动态调节有效容量，自动延长组间休息（+15至+25秒），设定保守 RIR 保护结缔组织，优先配置胸托支撑与导轨器械。
+- 📱 **折叠屏与平板自适应布局**: 针对三星 Galaxy Z Fold、Pixel Fold 与平板提供原生双列瀑布流 (`useResponsive`)，底栏居中防拇指拉扯，外屏超窄适配。
 - ⏱️ **锁屏常驻通知与实时活动 (Live Activity)**: 息屏状态下直接在锁屏界面查看组间休息倒计时，无需解锁手机即可点击 `+30秒` 或 `跳过休息`。
-- 🔁 **训练崩溃与内存回收自愈 (Crash Recovery)**: 训练状态周期性序列化，即使系统在后台清理内存，重新打开时即可一键完整恢复训练进度。
-- 📈 **力量曲线与即时 1RM 评估**: 动作重量进阶图表，结合 Epley 公式实时计算 1RM 极限推力。
-- 📋 **训练计划管理 (分化计划 CRUD)**: 支持创建多套训练计划（如 *"3天力量循环"*, *"假期高频备用"*），随时切换当前激活计划，并在任意训练日内自由调整动作顺序 (▲/▼)。
-- 🛠️ **自定义动作库**: 自主创建与编辑专属动作 (`is_custom = 1`)，配置肌群、动作模式与器械类型，严格保护官方动作完整性。
-- 🩺 **Android Health Connect 官方健康互联**: 双向同步体重、身高、日常步数与热量消耗，训练结束后自动将力量训练写入 Android 与 Wear OS 智能手表生态。
-- ☁️ **后台同步队列 (Sync Queue)**: 离线 FIFO 队列，网络畅通时自动异步增量上传至 Firebase Firestore 云端。
-- 🔒 **训练智能防息屏 (Wake Lock)**: 训练进行期间自动保持屏幕常亮，结束训练后恢复系统省电机制。
+- 🔁 **训练崩溃与内存回收自愈 (Crash Recovery)**: 训练状态周期性序列化，重新打开即可完整恢复训练进度。
+- 📈 **双重渐进超负荷与即时 1RM 评估**: 结合 Epley 公式实时评估极限推力与容量曲线。
+- 📋 **训练计划管理 (分化计划 CRUD)**: 支持创建多套训练计划，随时切换激活计划并自由排序。
+- 🛠️ **自定义动作库**: 自主创建与编辑专属动作 (`is_custom = 1`)，配置肌群、动作模式与器械类型。
+- 🩺 **统一健康生态互联 (Health Connect & Apple Health)**: 双向同步身体数据，读取智能手表心率（平均与峰值 BPM），并在训练结束后自动写入力量训练。
+- ☁️ **后台同步队列 (Sync Queue)**: 离线 FIFO 队列，网络恢复时增量上传至 Firebase Firestore。
+- 🔒 **训练智能防息屏 (Wake Lock)**: 训练进行期间自动保持屏幕常亮。
 
 ### 📐 视觉设计规范 (OLED 极简暗黑)
 - **纯黑背景**: OLED 专属 `#09090B`，高对比度低功耗。
@@ -132,19 +144,24 @@ O **heavy.io** é um aplicativo mobile de alta performance voltado para atletas 
 ├──────────────────────────────┬──────────────────────────────┤
 │  Presentation Layer          │  State & Business Logic      │
 │  • Expo Router (Tabs)        │  • Zustand Stores            │
-│  • Custom Exercise Modals    │  • Recommendation Engine     │
-│  • Rest Timer & Dock         │  • Crash Recovery Hydration  │
+│  • Foldable useResponsive    │  • Recommendation Engine     │
+│  • Reason-Based Swap Modals  │  • Age-Modulated Physiology  │
+│  • Rest Timer & Dock         │  • Progressive Overload      │
 ├──────────────────────────────┴──────────────────────────────┤
-│  Local Persistence & Device Hardware Services               │
-│  • Embedded SQLite (WAL Journal Mode)                       │
-│  • Expo Keep Awake (Wake Lock during Sets)                  │
-│  • Expo Haptics (Precision Mechanical Tactile Feedback)     │
-│  • Expo Notifications (Ongoing Sticky & Lock Screen Action) │
+│  AI & Machine Intelligence Layer                            │
+│  • Resilient Gemini Client (503 Fallback Cascade)           │
+│  • Biomechanical Exercise Substitutions & Anatomical Rationale│
+│  • Local Deterministic Heuristic Engine (100% Offline Safe) │
 ├──────────────────────────────┬──────────────────────────────┤
-│  Cloud & Ecosystem Sync      │  Health & Biometrics         │
-│  • Local SQLite Sync Queue   │  • Android Health Connect    │
-│  • Firebase Cloud Firestore  │  • Weight, Height, Steps     │
-└──────────────────────────────┴──────────────────────────────┘
+│  Local Persistence & Hardware│  Unified Health Ecosystem    │
+│  • Embedded SQLite (WAL Mode)│  • Android Health Connect    │
+│  • Expo Keep Awake & Haptics │  • Apple HealthKit (iOS)     │
+│  • Lock Screen Ongoing Notif │  • Smartwatch Heart Rate     │
+├──────────────────────────────┴──────────────────────────────┤
+│  Cloud & Background Sync                                     │
+│  • Local SQLite Sync Queue (FIFO with Exponential Backoff)  │
+│  • Firebase Cloud Firestore Data Ingestion                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -171,17 +188,14 @@ npx expo start -c
 
 ### 3. Validação e Testes Automatizados
 ```bash
-# Validação estrita de tipagem TypeScript
+# Validação estrita de tipagem TypeScript (zero erros)
 npx tsc --noEmit
 
 # Validação do manifesto nativo do Expo
 npx expo config --type prebuild
 
-# Execução da suíte de testes de banco de dados e regras de negócio
-python scratch/test_build_config.py
-python scratch/test_routine_management.py
-python scratch/test_custom_exercises.py
-python scratch/test_health_connect.py
+# Teste de empacotamento completo do Metro com cache limpo
+npx expo export --platform web --clear
 ```
 
 ### 4. Build de Produção via EAS
