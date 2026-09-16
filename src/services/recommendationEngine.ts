@@ -271,6 +271,7 @@ function getPhysiologicalParameters(
   const isAdvanced = inputs.experienceLevel === 'advanced';
   const isShortSession = inputs.sessionDuration === '30-45';
   const isLongSession = inputs.sessionDuration === '60-90';
+  const athleteAge = inputs.age || 26;
 
   // Base de Séries por Exercício
   let baseSets = 3;
@@ -282,8 +283,20 @@ function getPhysiologicalParameters(
     baseSets = 2; // Economia de tempo para manter alta intensidade de esforço
   }
 
+  // Modulação etária de volume: para atletas masters (>= 50 anos), evitar volumes excessivos
+  // que sobrecarreguem tendões e cartilagens, priorizando qualidade de esforço sobre junk volume
+  if (athleteAge >= 50 && baseSets > 3 && !isPriorityMuscle) {
+    baseSets = 3;
+  }
+
   // Descanso fisiológico: mulheres recuperam estoques de PCr mais rápido (Hunter, 2014)
   const restModifier = isFemale ? 0.8 : 1.0;
+
+  // Adição de descanso progressivo para atletas maduros (recuperação do sistema cardiovascular e tecido conjuntivo)
+  const ageRestAddition = athleteAge >= 60 ? 25 : athleteAge >= 50 ? 15 : athleteAge >= 40 ? 5 : 0;
+
+  // RIR mínimo seguro para atletas masters em compostos (evitar risco de colapso de forma técnica)
+  const baseRirPrimary = athleteAge >= 50 ? 2 : (inputs.goal === 'strength' ? 2 : 1.5);
 
   if (tier === 'primary_compound') {
     if (inputs.goal === 'strength') {
@@ -291,17 +304,17 @@ function getPhysiologicalParameters(
         sets: baseSets,
         repsMin: 4,
         repsMax: 6,
-        rir: 2,
-        rest: Math.round(150 * restModifier),
+        rir: baseRirPrimary,
+        rest: Math.round(150 * restModifier + ageRestAddition),
         role: 'Tensão Mecânica Primária (Recrutamento de Unidades Motoras de Alto Limiar)',
       };
     }
     return {
       sets: baseSets,
-      repsMin: 6,
-      repsMax: 8,
-      rir: 1.5,
-      rest: Math.round(120 * restModifier),
+      repsMin: athleteAge >= 60 ? 8 : 6,
+      repsMax: athleteAge >= 60 ? 10 : 8,
+      rir: baseRirPrimary,
+      rest: Math.round(120 * restModifier + ageRestAddition),
       role: 'Sobrecarga Mecânica em Posição de Vantagem Biomecânica',
     };
   }
@@ -311,8 +324,8 @@ function getPhysiologicalParameters(
       sets: baseSets,
       repsMin: 8,
       repsMax: 10,
-      rir: 1.5,
-      rest: Math.round(90 * restModifier),
+      rir: athleteAge >= 50 ? 2 : 1.5,
+      rest: Math.round(90 * restModifier + ageRestAddition),
       role: 'Sobrecarga em Ângulo Complementar de Fibras Musculares',
     };
   }
@@ -323,7 +336,7 @@ function getPhysiologicalParameters(
       repsMin: 10,
       repsMax: 12,
       rir: 1,
-      rest: Math.round(75 * restModifier),
+      rest: Math.round(75 * restModifier + Math.round(ageRestAddition * 0.7)),
       role: 'Hipertrofia Mediada pelo Alongamento (Titina & Tensão Passiva Elevada)',
     };
   }
@@ -334,18 +347,18 @@ function getPhysiologicalParameters(
       repsMin: 12,
       repsMax: 15,
       rir: 1,
-      rest: Math.round(60 * restModifier),
+      rest: Math.round(60 * restModifier + Math.round(ageRestAddition * 0.5)),
       role: 'Tensão Contínua no Encurtamento & Estresse Metabólico Controlado',
     };
   }
 
   if (tier === 'core') {
     return {
-      sets: 3,
+      sets: athleteAge >= 60 ? 2 : 3,
       repsMin: 12,
       repsMax: 20,
       rir: 1,
-      rest: Math.round(60 * restModifier),
+      rest: Math.round(60 * restModifier + Math.round(ageRestAddition * 0.5)),
       role: 'Estabilidade do Complexo Lombo-Pélvico & Transferência de Força',
     };
   }
@@ -356,7 +369,7 @@ function getPhysiologicalParameters(
     repsMin: 10,
     repsMax: 15,
     rir: 1,
-    rest: Math.round(60 * restModifier),
+    rest: Math.round(60 * restModifier + Math.round(ageRestAddition * 0.5)),
     role: 'Isolamento Seletivo com Baixo Custo Neural Sistêmico',
   };
 }
@@ -509,6 +522,45 @@ function scoreExerciseCandidate(
       score += 20;
     }
     if (ex.id === 'cable_lateral_raise' || ex.id === 'dumbbell_lateral_raise_standing') {
+      score += 15;
+    }
+  }
+
+  // 9b. Fisiologia e Preservação Articular por Faixa Etária (Master/Sênior)
+  const athleteAge = criteria.inputs.age || 26;
+  if (athleteAge >= 50) {
+    // 1. Privilegiar trajetórias guiadas e cabos (tensão constante com menor demanda de estabilização articular passiva)
+    if (ex.equipment === 'machine' || ex.equipment === 'cable') {
+      score += 25;
+    }
+    // 2. Priorizar apoio torácico e alívio de estresse na coluna
+    if (
+      ex.id === 'chest_supported_dumbbell_row' ||
+      ex.id === 'seated_cable_row' ||
+      ex.id === 'machine_chest_press' ||
+      ex.id === 'lat_pulldown_close_grip_v_bar'
+    ) {
+      score += 25;
+    }
+    // 3. Substituir agachamento com barra nas costas livre por Hack ou Leg Press para poupar discos
+    if (ex.id === 'hack_squat_machine' || ex.id === 'leg_press_45_degree') {
+      score += 25;
+    }
+    // 4. Atenuar exercícios com torque de cisalhamento axial desnecessariamente elevado
+    if (
+      ex.id === 'good_morning_barbell' ||
+      ex.id === 't_bar_row_unsupported' ||
+      ex.id === 'barbell_bent_over_row' ||
+      ex.id === 'barbell_back_squat_low_bar'
+    ) {
+      score -= 35;
+    }
+  } else if (athleteAge >= 40) {
+    // Atletas 40-49: preferência sutil por alto SFR e apoio
+    if (ex.equipment === 'machine' || ex.equipment === 'cable') {
+      score += 10;
+    }
+    if (ex.id === 'chest_supported_dumbbell_row' || ex.id === 'hack_squat_machine') {
       score += 15;
     }
   }
@@ -974,14 +1026,25 @@ export const generateGuidedRoutine = (inputs: GuidedInputs): GeneratedPlan => {
     effectiveInputs.musclePriority === 'legs_glutes' ? 'Pernas & Glúteos' :
     effectiveInputs.musclePriority === 'shoulders' ? 'Deltoides' : 'Braços';
 
+  const athleteAge = effectiveInputs.age || 26;
+  const ageProfileDesc = athleteAge >= 50
+    ? `Master (${athleteAge} anos): foco em relação estímulo-fadiga (SFR), proteção articular via aparelhos guiados e suporte torácico`
+    : athleteAge >= 35
+    ? `Adulto (${athleteAge} anos): equilíbrio biomecânico entre tensão mecânica e gestão de fadiga cumulativa`
+    : `Jovem (${athleteAge} anos): alta capacidade adaptativa e tolerância volumétrica`;
+
+  const recoveryDesc = athleteAge >= 50
+    ? `Frequência de 2x/semana com descansos estendidos (+15 a +25s) para regeneração articular e de fosfagênios`
+    : `Frequência de 2x/semana por agrupamento com descanso inter-série otimizado para restauração neural e de fosfocreatina`;
+
   const scientificSummary = {
     primaryStimulus: `Tensão Mecânica Primária (RIR 1–2) com ênfase em Hipertrofia Mediada pelo Alongamento (Stretch-Mediated)`,
     weeklyVolumeProfile: `Volume Real Efetivo: ~${totalWeeklySets} séries semanais totais calibradas para MAV (Volume Máximo Adaptativo) e foco em ${priorityName}`,
-    anthropometricAdaptation: `Calibrado para ${sexLabel}, ${effectiveInputs.heightCm}cm, ${effectiveInputs.weightKg}kg e alavancas biomecânicas personalizadas`,
-    recoveryRecommendation: `Frequência de 2x/semana por agrupamento com descanso inter-série otimizado para restauração neural e de fosfocreatina`,
+    anthropometricAdaptation: `Calibrado para ${sexLabel}, ${effectiveInputs.heightCm}cm, ${effectiveInputs.weightKg}kg. Faixa etária: ${ageProfileDesc}`,
+    recoveryRecommendation: recoveryDesc,
   };
 
-  const description = `Periodização científica para ${effectiveInputs.frequency} dias/semana (${effectiveInputs.sessionDuration} min/sessão). ${scientificSummary.weeklyVolumeProfile}. Biomecânica calibrada para ${sexLabel}, ${effectiveInputs.age} anos.`;
+  const description = `Periodização científica para ${effectiveInputs.frequency} dias/semana (${effectiveInputs.sessionDuration} min/sessão). ${scientificSummary.weeklyVolumeProfile}. Biomecânica calibrada para ${sexLabel}, ${effectiveInputs.age} anos (${ageProfileDesc}).`;
 
   return {
     planName: planTitle,
